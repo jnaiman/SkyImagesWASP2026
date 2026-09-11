@@ -35,6 +35,10 @@ parser.add_argument("-sky_source", nargs='?', default='both',
                     choices=['both', 'astroquery', 'gmm'],
                     help='for "image of the sky": real SkyView cutouts, a synthetic '
                          'gaussian-mixture sky, or a mix of the two')
+parser.add_argument("-sky_local_only", nargs='?', type=int, default=0,
+                    help='1 = never query SkyView; draw real cutouts only from the '
+                         '.fits already in -astroquery_img_dir. Runs offline and much '
+                         'faster, but only sees objects downloaded before')
 parser.add_argument("-panel_median", nargs='?', type=int, default=4,
                     help='typical number of panels per figure (1 to force single-panel)')
 parser.add_argument("-panel_max", nargs='?', type=int, default=25)
@@ -138,6 +142,11 @@ if need_sky and not os.path.exists(astroquery_img_dir):
 # synthetic gaussian-mixture sky; -sky_source picks between them
 sky_from_astroquery_prob = 1.0 if args.sky_source in ('both', 'astroquery') else 0.0
 sky_from_gmm_prob = 1.0 if args.sky_source in ('both', 'gmm') else 0.0
+sky_local_only = bool(args.sky_local_only)
+if is_root() and sky_local_only and sky_from_astroquery_prob > 0:
+    from skyfigs.utils.distribution_utils import list_local_sky_images
+    print('sky images: local only,', len(list_local_sky_images(astroquery_img_dir)),
+          'cached cutouts in', astroquery_img_dir)
 
 plot_params, panel_params, title_params, xlabel_params, \
     ylabel_params, colorbar_params, linestyles_hist, linestyles, \
@@ -147,7 +156,8 @@ plot_params, panel_params, title_params, xlabel_params, \
                                      panel_median=args.panel_median,
                                      panel_max=args.panel_max,
                                      sky_from_astroquery_prob=sky_from_astroquery_prob,
-                                     sky_from_gmm_prob=sky_from_gmm_prob)
+                                     sky_from_gmm_prob=sky_from_gmm_prob,
+                                     sky_local_only=sky_local_only)
 
 if is_root():
     print('plot types:', {k: round(float(v['prob']), 3) for k, v in plot_params.items()})
@@ -156,6 +166,7 @@ if is_root():
 # kwargs handed to make_random_plot; FigureRun keeps any of these that name one
 # of its attributes, and re-applies them every time it resets itself mid-figure
 figure_kwargs = dict(plot_params=plot_params,
+                     panel_params=panel_params,
                      title_params=title_params,
                      xlabel_params=xlabel_params,
                      ylabel_params=ylabel_params,

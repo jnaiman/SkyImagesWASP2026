@@ -291,6 +291,9 @@ plot_types_params = {
                                 # where to store images once they have been queried & downloaded
                                 'query images dir':'astroquery_images/', 
                                 'missing obj/surveys list':'~/ArXiv_figure_injection/resources/obj_survey_missing_files/obj_survey_missing_list.csv',
+                                # only use cutouts already in 'query images dir'?
+                                # True -> no network, no SkyView queries at all
+                                'local only':False,
                                 'image width':300, # 300 for h & w are astroquery defaults
                                 'image height':300,
                                 'resolution':{'min':0.5, 'max':1.0} # what percentage along axis to take each image

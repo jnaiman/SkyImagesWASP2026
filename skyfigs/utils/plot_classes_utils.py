@@ -86,6 +86,9 @@ class ImageOfSky():
         self.obj = None
         self.survey = None # e.g., {'key':'O', 'survey':'Optical:SDSS'}
         self.query_images_dir = None
+        # None -> take it from plot_params; True -> never query SkyView, only
+        # use cutouts already in query_images_dir
+        self.local_only = None
         self.image_or_contour = None
         # colorbar
         self.colorbar_side = None

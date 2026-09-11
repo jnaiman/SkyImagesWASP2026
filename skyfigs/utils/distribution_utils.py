@@ -1124,6 +1124,60 @@ import gc
 from glob import glob
 from mpi4py import MPI
 # JPN -- here you want function as rng.uniform when
+_local_sky_files_cache = {}
+
+
+def list_local_sky_images(query_imgs_dir, verbose=False):
+    """
+    Every .fits already downloaded into the astroquery cache.  Listed once per
+    process -- the cache holds ~1e5 files, so this is not something to redo on
+    every figure.
+    """
+    query_imgs_dir = os.path.expanduser(query_imgs_dir)
+    if query_imgs_dir not in _local_sky_files_cache:
+        try:
+            files = [f for f in os.listdir(query_imgs_dir) if f.endswith('.fits')]
+        except FileNotFoundError:
+            files = []
+        _local_sky_files_cache[query_imgs_dir] = np.array(sorted(files))
+        if verbose:
+            print('    local sky image cache:', len(files), 'files in', query_imgs_dir)
+    return _local_sky_files_cache[query_imgs_dir]
+
+
+def parse_sky_image_filename(filename):
+    """
+    Recover (pdf, object, survey) from a cached cutout's name, which
+    get_images_survey built as
+
+        image_<pdf>_OBJ_<object>_SURVEY_<survey>_height<H>_width<W>_NUM_<N>.fits
+
+    The object and survey were written with ' ' -> '_' and '/' -> '-', so what
+    comes back is the flattened form, not necessarily the original string.
+    """
+    stem = filename.removeprefix('image_').removesuffix('.fits')
+    pdf, _, rest = stem.partition('_OBJ_')
+    obj, _, rest = rest.partition('_SURVEY_')
+    survey = rest.partition('_height')[0]
+    return pdf, obj, survey
+
+
+def pick_local_sky_image(query_imgs_dir, rng=np.random, verbose=False):
+    """
+    Choose a random already-downloaded cutout instead of querying SkyView.
+    Returns (filename, obj, survey) shaped like the query path's results, so
+    the metadata written into the figure json keeps the same fields.
+    """
+    files = list_local_sky_images(query_imgs_dir, verbose=verbose)
+    if len(files) == 0:
+        raise FileNotFoundError(
+            'no .fits files in ' + str(query_imgs_dir) + ' -- "local only" needs a '
+            'populated astroquery image cache (drop the flag to query SkyView)')
+    filename = str(rng.choice(files))
+    pdf, obj_name, survey = parse_sky_image_filename(filename)
+    return filename, {'object': obj_name, 'pdf': pdf, 'wavelength': ''}, [survey]
+
+
 def get_sky_image_data(plot_params,
                    cmin=0, cmax=1, 
                    verbose=False, rng=np.random, timer_pause=1.0, 
@@ -1231,48 +1285,60 @@ def get_sky_image_data(plot_params,
     else:
         query_imgs_dir = imgOfSky.query_images_dir 
 
+    # restrict to images already sitting in the astroquery cache?
+    local_only = plot_params['distribution']['sky'].get('local only', False)
+    if imgOfSky.local_only is not None:
+        local_only = imgOfSky.local_only
+
     filename = None
     while filename is None:
-        # grab random object
-        # object, wavelength(s), pdf, itable
-        if use_random_obj: # if not already selected, select it!
-            obj = rng.choice(object_wavelengths)
-
-        # if only wavelength is emtpy, just guess optical
-        if obj['wavelength'] == '':
-            survey_keys = ['Optical:DSS class='] #surveys_by_wl['O']
-            if verbose_get_images:
-                print('No wavelength, picking optical ( wavelength empty )')
+        if local_only:
+            # no network: pick one of the cutouts already on disk
+            filename, obj, survey = pick_local_sky_image(query_imgs_dir, rng=rng,
+                                                         verbose=verbose)
+            if verbose:
+                print('    object, survey, pdf (local):', obj['object'], survey, obj['pdf'])
         else:
-            if survey_keys is None:
-                survey_keys = surveys_by_wl[obj['wavelength']]
+            # grab random object
+            # object, wavelength(s), pdf, itable
+            if use_random_obj: # if not already selected, select it!
+                obj = rng.choice(object_wavelengths)
 
-        # pick random survey
-        if not pick_random_survey:
-            survey = [rng.choice(survey_keys)]
-            if verbose_get_images: print('picking random survey:', survey)
-        else:
-            survey = survey_keys
+            # if only wavelength is emtpy, just guess optical
+            if obj['wavelength'] == '':
+                survey_keys = ['Optical:DSS class='] #surveys_by_wl['O']
+                if verbose_get_images:
+                    print('No wavelength, picking optical ( wavelength empty )')
+            else:
+                if survey_keys is None:
+                    survey_keys = surveys_by_wl[obj['wavelength']]
 
-        if verbose:
-            print('    object, survey, pdf:', obj['object'], survey, obj['pdf'])
+            # pick random survey
+            if not pick_random_survey:
+                survey = [rng.choice(survey_keys)]
+                if verbose_get_images: print('picking random survey:', survey)
+            else:
+                survey = survey_keys
 
-        # try all surveys
-        isurvey = 0
-        n_surveys = len(survey_keys)
-        while filename is None and isurvey < n_surveys:
-            if verbose_get_images: print(' on survey', survey, '(', isurvey+1, 'of', n_surveys, ')')
-            filename, err = get_images_survey(survey, obj['object'], 
-                            query_imgs_dir, 
-                            obj['pdf'], missing_list, missing_list_file,
-                        verbose=verbose_get_images, sleep_time = timer_pause, overwrite = overwrite, 
-                        pick_random_survey = pick_random_survey, rng=rng, 
-                        height=height, width=width, running_in_parallel=running_in_parallel, 
-                        comm=comm)
-            # try different survey if no file
-            if filename is None:
-                survey = [survey_keys[isurvey]]
-                isurvey += 1
+            if verbose:
+                print('    object, survey, pdf:', obj['object'], survey, obj['pdf'])
+
+            # try all surveys
+            isurvey = 0
+            n_surveys = len(survey_keys)
+            while filename is None and isurvey < n_surveys:
+                if verbose_get_images: print(' on survey', survey, '(', isurvey+1, 'of', n_surveys, ')')
+                filename, err = get_images_survey(survey, obj['object'], 
+                                query_imgs_dir, 
+                                obj['pdf'], missing_list, missing_list_file,
+                            verbose=verbose_get_images, sleep_time = timer_pause, overwrite = overwrite, 
+                            pick_random_survey = pick_random_survey, rng=rng, 
+                            height=height, width=width, running_in_parallel=running_in_parallel, 
+                            comm=comm)
+                # try different survey if no file
+                if filename is None:
+                    survey = [survey_keys[isurvey]]
+                    isurvey += 1
 
         # try to open
         if filename is not None:

@@ -38,7 +38,8 @@ def make_plotplotparams(fullproc_r=None,
                         panel_median=4, panel_max=25,
                         equation_prob=0.25, colorbar_prob=1.0,
                         contour_prob=1.0, sky_prob=1.0,
-                        sky_from_astroquery_prob=1.0, sky_from_gmm_prob=1.0):
+                        sky_from_astroquery_prob=1.0, sky_from_gmm_prob=1.0,
+                        sky_local_only=False):
     """
     Build every probability table plot generation needs.
 
@@ -55,6 +56,10 @@ def make_plotplotparams(fullproc_r=None,
     sky_from_astroquery_prob / sky_from_gmm_prob
                        : within "image of the sky", weight of a real SkyView
                          cutout vs. a synthetic gaussian-mixture "sky".
+    sky_local_only     : True -> never query SkyView; draw real cutouts only
+                         from the .fits already cached in astroquery_img_dir.
+                         Runs offline, and much faster, but only sees objects
+                         that have been downloaded before.
 
     Returns
         plot_params_line, panel_params, title_params, xlabel_params,
@@ -126,6 +131,8 @@ def make_plotplotparams(fullproc_r=None,
         plot_params_line['image of the sky']['distribution']['sky']['query images dir'] = astroquery_img_dir
         # 3. running cache of (object, survey) pairs SkyView has nothing for
         plot_params_line['image of the sky']['distribution']['sky']['missing obj/surveys list'] = missing_list_file
+        # 4. restrict to what is already downloaded, instead of querying SkyView
+        plot_params_line['image of the sky']['distribution']['sky']['local only'] = sky_local_only
 
         # image or lines
         plot_params_line['image of the sky']['image or contour']['prob']['image'] = 1000

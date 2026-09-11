@@ -1,7 +1,8 @@
 from .utils.plot_check_utils import set_all_seeds
 from .utils.figure_build_utils import set_figure_params, create_data_save_dict, get_fonts
 from .utils.plot_parameters import aspect_fig_params, \
-    dpi_params, tight_layout_params, panel_params, base, plot_flip_params, fontsizes
+    dpi_params, tight_layout_params, base, plot_flip_params, fontsizes
+from .utils.plot_parameters import panel_params as panel_params_default
 from .utils.synthetic_fig_utils import get_font_params
 from .utils.text_utils import get_popular_nouns, get_inline_math
 
@@ -81,6 +82,7 @@ class FigureRun():
             xlabels_pull=None, ylabels_pull=None, titles_pull=None, 
             data_save=None, success_plot = False, itries=0, success_flip=False,
             success_flags = None, tight_layout_params=None, itriesMax=50, 
+            panel_params=None, 
             font_names=None, popular_nouns=None, inlines=None, 
             plot_params = None,
             title_params = None, xlabel_params = None, 
@@ -99,6 +101,9 @@ class FigureRun():
         if tight_layout_params is None:
             tight_layout_params = tight_layout_params_checked
         self.tight_layout_params = tight_layout_params
+        if panel_params is None:
+            panel_params = panel_params_default
+        self.panel_params = panel_params
         fullproc_r = get_resources_dir(fullproc_r)
         self.fullproc_r = fullproc_r
         if color_maps is None: 
@@ -125,7 +130,7 @@ class FigureRun():
             figure_params = set_figure_params(self.rng_dict, 
                                             self.color_maps, self.plot_styles, 
                                                 aspect_fig_params, dpi_params, 
-                                                panel_params, self.tight_layout_params, 
+                                                self.panel_params, self.tight_layout_params, 
                                                 base, plot_flip_params,
                                                 verbose=verbose)
         self.figure_params = figure_params
@@ -219,7 +224,8 @@ def reset_figure(reset_labels=True, verbose=False, itries=0, **kwargs):
     # fullproc_r has to go through the constructor: everything else can be
     # patched in afterwards, but the resources dir decides where FigureRun reads
     # its fonts, nouns and inline math from
-    figureout = FigureRun(fullproc_r=kwargs.get('fullproc_r'))
+    figureout = FigureRun(fullproc_r=kwargs.get('fullproc_r'),
+                          panel_params=kwargs.get('panel_params'))
     for k,v in kwargs.items():
         if k in figureout.__dict__: # in there
             if verbose:
