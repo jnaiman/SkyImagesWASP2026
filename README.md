@@ -26,8 +26,6 @@ conda activate SkyImages
 python -m spacy download en_core_web_sm
 python -c "import nltk; nltk.download('stopwords')"
 
-./fetch_resources.sh                 # populate resources/ (see below)
-
 # serial
 python create_figures_batch.py -save_dir ./synthetic_figures/ -number_of_figures 20
 
@@ -85,10 +83,11 @@ upstream batch script.
 
 The generator reads several corpus-derived lookup tables (fonts, the noun and
 inline-math pools for labels, and the object/wavelength pool that
-`image of the sky` draws real targets from). They are data, not code, so they
-are not tracked here — `./fetch_resources.sh` copies them from a local
-`ArXiv_figure_injection` checkout. See [resources/README.md](resources/README.md)
-for what each one is.
+`image of the sky` draws real targets from). They live in
+[`resources/`](resources/README.md) and are tracked in git (~117 MB), so a
+fresh clone runs with no extra setup. `./fetch_resources.sh` re-copies them
+from a local `ArXiv_figure_injection` checkout, for when the upstream tables
+are regenerated.
 
 Resolution order: `-resources_dir` → `$SKYFIGS_RESOURCES` → `resources/`.
 

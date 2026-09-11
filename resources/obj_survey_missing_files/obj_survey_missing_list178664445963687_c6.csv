@@ -1,0 +1,10 @@
+object,survey,pdf,reason
+NGC  7790    86,TESS,1958ApJ___128__150S,exception
+NGC  7790    86,Mellinger Red,1958ApJ___128__150S,exception
+NGC  7790    86,Mellinger Green,1958ApJ___128__150S,exception
+NGC  7790    86,Mellinger Blue,1958ApJ___128__150S,exception
+NGC  7790    86,H-Alpha Comp,1958ApJ___128__150S,exception
+NGC  7790    86,SHASSA H,1958ApJ___128__150S,no survey
+NGC  7790    86,SHASSA CC,1958ApJ___128__150S,no survey
+NGC  7790    86,SHASSA C,1958ApJ___128__150S,no survey
+NGC  7790    86,SHASSA Sm,1958ApJ___128__150S,no survey

@@ -52,12 +52,21 @@ place () {
 echo "resources: $SRC -> $DST ($MODE)"
 for f in "${FILES[@]}" "${SKY_FILES[@]}"; do place "$f"; done
 
-# Cache of (object, survey) pairs SkyView has no image for.  Large (tens of
-# thousands of per-rank csv shards) and regenerated as runs proceed, so it is
-# always linked rather than copied.
+# Cache of (object, survey) pairs SkyView has no image for: tens of thousands of
+# per-rank csv shards, appended to as runs proceed.  This repo keeps its own
+# copy so it is self-contained; MODE=link shares one cache between checkouts
+# instead.
+rm -f "$DST/obj_survey_missing_files"   # drop a symlink left by an older run
 if [ -d "$SRC/obj_survey_missing_files" ]; then
-    ln -sfn "$SRC/obj_survey_missing_files" "$DST/obj_survey_missing_files"
-    echo "  linked  obj_survey_missing_files/"
+    if [ "$MODE" = "link" ]; then
+        ln -sfn "$SRC/obj_survey_missing_files" "$DST/obj_survey_missing_files"
+        echo "  linked  obj_survey_missing_files/"
+    else
+        mkdir -p "$DST/obj_survey_missing_files"
+        # -a so a re-run only moves shards that are new or changed
+        rsync -a --delete "$SRC/obj_survey_missing_files/" "$DST/obj_survey_missing_files/"
+        echo "  copied  obj_survey_missing_files/ ($(ls -1 "$DST/obj_survey_missing_files" | wc -l | tr -d ' ') files)"
+    fi
 else
     mkdir -p "$DST/obj_survey_missing_files"
     echo "  created empty obj_survey_missing_files/ (will be filled as you run)"

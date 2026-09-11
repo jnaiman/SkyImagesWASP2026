@@ -11,11 +11,9 @@ jsons/
 pickles/
 diags/
 
-# --- resources: corpus-derived lookup tables, not code ---
-# populate with ./fetch_resources.sh  (see resources/README.md)
-resources/*
-!resources/README.md
-!resources/.gitkeep
+# --- resources ---
+# The corpus-derived lookup tables ARE tracked, so a fresh clone runs without
+# needing ./fetch_resources.sh.  See resources/README.md.
 
 # --- astroquery/SkyView download cache ---
 astroquery_images/
