@@ -11987,3 +11987,84 @@ Cl* NGC 6791    KIN      n,DSS2 IR,1965ApJ___142__655K,no survey
 *  10 Lac,GOODS: Herschel 500,1990AJ_____99__323B,no survey
 *  10 Lac,CDFS: LESS,1990AJ_____99__323B,no survey
 *  10 Lac,GOODS: VLA North,1990AJ_____99__323B,no survey
+NGC  7052,Mellinger Red,1978ApJ___221__456C,exception
+NGC  7052,Mellinger Green,1978ApJ___221__456C,exception
+NGC  7052,Mellinger Blue,1978ApJ___221__456C,exception
+NGC  7052,SHASSA H,1978ApJ___221__456C,no survey
+NGC  7052,SHASSA CC,1978ApJ___221__456C,no survey
+NGC  7052,SHASSA C,1978ApJ___221__456C,no survey
+NGC  7052,SHASSA Sm,1978ApJ___221__456C,no survey
+V* V1328 Ori,Mellinger Red,1988AJ_____95_1755J,exception
+V* V1328 Ori,Mellinger Green,1988AJ_____95_1755J,exception
+V* V1328 Ori,Mellinger Blue,1988AJ_____95_1755J,exception
+V* V1328 Ori,SHASSA H,1988AJ_____95_1755J,no survey
+V* V1328 Ori,SHASSA CC,1988AJ_____95_1755J,no survey
+V* V1328 Ori,SHASSA C,1988AJ_____95_1755J,no survey
+V* V1328 Ori,SHASSA Sm,1988AJ_____95_1755J,no survey
+*  64 Aql,Mellinger Red,1971ApJ___163___75S,exception
+*  64 Aql,Mellinger Green,1971ApJ___163___75S,exception
+*  64 Aql,Mellinger Blue,1971ApJ___163___75S,exception
+*  64 Aql,SHASSA H,1971ApJ___163___75S,no survey
+*  64 Aql,SHASSA CC,1971ApJ___163___75S,no survey
+*  64 Aql,SHASSA C,1971ApJ___163___75S,no survey
+*  64 Aql,SHASSA Sm,1971ApJ___163___75S,no survey
+SCMS  499,DSS1 Blue,1995AJ____110_2747S,no survey
+SCMS  499,DSS1 Red,1995AJ____110_2747S,no survey
+2MASS J04565104-6624521,Mellinger Red,1992AJ____103_1205P,exception
+2MASS J04565104-6624521,Mellinger Green,1992AJ____103_1205P,exception
+2MASS J04565104-6624521,Mellinger Blue,1992AJ____103_1205P,exception
+2MASS J04565104-6624521,SHASSA H,1992AJ____103_1205P,no survey
+2MASS J04565104-6624521,SHASSA CC,1992AJ____103_1205P,no survey
+2MASS J04565104-6624521,SHASSA C,1992AJ____103_1205P,no survey
+2MASS J04565104-6624521,SHASSA Sm,1992AJ____103_1205P,no survey
+V* R Aqr,Mellinger Red,1986AJ_____91_1400G,exception
+V* R Aqr,Mellinger Green,1986AJ_____91_1400G,exception
+V* R Aqr,Mellinger Blue,1986AJ_____91_1400G,exception
+V* R Aqr,SHASSA H,1986AJ_____91_1400G,no survey
+V* R Aqr,SHASSA CC,1986AJ_____91_1400G,no survey
+V* R Aqr,SHASSA C,1986AJ_____91_1400G,no survey
+V* R Aqr,SHASSA Sm,1986AJ_____91_1400G,no survey
+NGC  2287    66,Mellinger Red,1954ApJ___119__188C,exception
+NGC  2287    66,Mellinger Green,1954ApJ___119__188C,exception
+NGC  2287    66,Mellinger Blue,1954ApJ___119__188C,exception
+NGC  2287    66,SHASSA H,1954ApJ___119__188C,no survey
+NGC  2287    66,SHASSA CC,1954ApJ___119__188C,no survey
+NGC  2287    66,SHASSA C,1954ApJ___119__188C,no survey
+NGC  2287    66,SHASSA Sm,1954ApJ___119__188C,no survey
+NGC  7790     6,Mellinger Red,1958ApJ___128__150S,exception
+NGC  7790     6,Mellinger Green,1958ApJ___128__150S,exception
+NGC  7790     6,Mellinger Blue,1958ApJ___128__150S,exception
+NGC  7790     6,SHASSA H,1958ApJ___128__150S,no survey
+NGC  7790     6,SHASSA CC,1958ApJ___128__150S,no survey
+NGC  7790     6,SHASSA C,1958ApJ___128__150S,no survey
+NGC  7790     6,SHASSA Sm,1958ApJ___128__150S,no survey
+* pi. Cap,Mellinger Red,1914ApJ____40___43K,exception
+* pi. Cap,Mellinger Green,1914ApJ____40___43K,exception
+* pi. Cap,Mellinger Blue,1914ApJ____40___43K,exception
+* pi. Cap,SHASSA H,1914ApJ____40___43K,no survey
+* pi. Cap,SHASSA CC,1914ApJ____40___43K,no survey
+* pi. Cap,SHASSA C,1914ApJ____40___43K,no survey
+* pi. Cap,SHASSA Sm,1914ApJ____40___43K,no survey
+[DB2002b] G236.69-34.00,DSS1 Blue,1988ApJ___334__815D,no survey
+[DB2002b] G236.69-34.00,DSS1 Red,1988ApJ___334__815D,no survey
+[VV2006] J142501.5+382100,Mellinger Red,1989ApJS___70__163P,exception
+[VV2006] J142501.5+382100,Mellinger Green,1989ApJS___70__163P,exception
+[VV2006] J142501.5+382100,Mellinger Blue,1989ApJS___70__163P,exception
+[VV2006] J142501.5+382100,SHASSA H,1989ApJS___70__163P,no survey
+[VV2006] J142501.5+382100,SHASSA CC,1989ApJS___70__163P,no survey
+[VV2006] J142501.5+382100,SHASSA C,1989ApJS___70__163P,no survey
+[VV2006] J142501.5+382100,SHASSA Sm,1989ApJS___70__163P,no survey
+[SC96] GC 599,DSS1 Blue,1996ApJS__104__101S,no survey
+[SC96] GC 599,DSS1 Red,1996ApJS__104__101S,no survey
+[SC96] GC 599,DSS2 Blue,1996ApJS__104__101S,no survey
+2C   26,Mellinger Red,1983AJ_____88__709H,exception
+2C   26,Mellinger Green,1983AJ_____88__709H,exception
+2C   26,Mellinger Blue,1983AJ_____88__709H,exception
+2C   26,SHASSA H,1983AJ_____88__709H,no survey
+2C   26,SHASSA CC,1983AJ_____88__709H,no survey
+2C   26,SHASSA C,1983AJ_____88__709H,no survey
+2C   26,SHASSA Sm,1983AJ_____88__709H,no survey
+EDCC 154,DSS1 Blue,1996AJ____112_2454L,no survey
+EDCC 154,DSS1 Red,1996AJ____112_2454L,no survey
+PGMW 3245,DSS1 Blue,1992AJ____103_1205P,no survey
+PGMW 3245,DSS1 Red,1992AJ____103_1205P,no survey
