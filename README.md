@@ -85,7 +85,7 @@ The generator reads several corpus-derived lookup tables (fonts, the noun and
 inline-math pools for labels, and the object/wavelength pool that
 `image of the sky` draws real targets from). They live in
 [`resources/`](resources/README.md) and are tracked in git (~117 MB), so a
-fresh clone runs with no extra setup. `./fetch_resources.sh` re-copies them
+fresh clone runs with no extra setup. `misc/fetch_resources.sh` re-copies them
 from a local `ArXiv_figure_injection` checkout, for when the upstream tables
 are regenerated.
 
@@ -155,7 +155,7 @@ unchanged except where noted, so that changes can still be diffed back.
 |---|---|
 | `create_figures_batch.py` | standalone batch driver. Same role as `synthetic_training_figures/create_figures_batch.py`, but built on the newer `make_random_plot` rather than that script's inlined loop, and restricted to two plot types |
 | `skyfigs/paths.py` | resolves the resources directory (was hard-coded to `~/ArXiv_figure_injection/resources/` in three places) |
-| `skyfigs/__init__.py`, `fetch_resources.sh`, `environment.yml`, `.gitignore` | |
+| `skyfigs/__init__.py`, `misc/fetch_resources.sh`, `environment.yml`, `.gitignore` | |
 
 ### Copied
 

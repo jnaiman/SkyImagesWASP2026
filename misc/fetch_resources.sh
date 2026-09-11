@@ -1,19 +1,20 @@
 #!/usr/bin/env bash
 # Populate resources/ with the static lookup tables the figure generator reads.
 #
-# They are corpus-derived artefacts of the ArXiv mining pipeline, not code, so
-# they are not tracked in this repo.  By default they are copied from a local
-# checkout of ArXiv_figure_injection; point SRC elsewhere (or rsync from the
-# cluster) if yours lives somewhere else.
+# The tables ARE tracked in git, so a fresh clone already has them and does not
+# need to run this.  Use it to re-sync when the upstream tables are regenerated.
+# By default they are copied from a local checkout of ArXiv_figure_injection;
+# point SRC elsewhere (or rsync from the cluster) if yours lives somewhere else.
 #
-#   ./fetch_resources.sh                      # copy from ~/ArXiv_figure_injection/resources
-#   ./fetch_resources.sh /path/to/resources   # copy from somewhere else
-#   ./fetch_resources.sh /path/to/resources link   # symlink instead of copy
+#   misc/fetch_resources.sh                      # copy from ~/ArXiv_figure_injection/resources
+#   misc/fetch_resources.sh /path/to/resources   # copy from somewhere else
+#   misc/fetch_resources.sh /path/to/resources link   # symlink instead of copy
 set -euo pipefail
 
 SRC="${1:-$HOME/ArXiv_figure_injection/resources}"
 MODE="${2:-copy}"
-DST="$(cd "$(dirname "$0")" && pwd)/resources"
+# repo root is one level up from misc/, wherever this script is called from
+DST="$(cd "$(dirname "$0")/.." && pwd)/resources"
 
 if [ ! -d "$SRC" ]; then
     echo "source resources dir not found: $SRC" >&2
@@ -56,7 +57,10 @@ for f in "${FILES[@]}" "${SKY_FILES[@]}"; do place "$f"; done
 # per-rank csv shards, appended to as runs proceed.  This repo keeps its own
 # copy so it is self-contained; MODE=link shares one cache between checkouts
 # instead.
-rm -f "$DST/obj_survey_missing_files"   # drop a symlink left by an older run
+# drop a symlink left by an older run (but never an existing real directory)
+if [ -L "$DST/obj_survey_missing_files" ]; then
+    rm -f "$DST/obj_survey_missing_files"
+fi
 if [ -d "$SRC/obj_survey_missing_files" ]; then
     if [ "$MODE" = "link" ]; then
         ln -sfn "$SRC/obj_survey_missing_files" "$DST/obj_survey_missing_files"

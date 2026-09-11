@@ -4,7 +4,7 @@ Static lookup tables read by the figure generator.  They are corpus-derived
 artefacts of the ArXiv mining pipeline rather than code, but they **are tracked
 in git** so that a fresh clone runs without any extra setup (~117 MB).
 
-`../fetch_resources.sh` re-copies them from a local `ArXiv_figure_injection`
+`../misc/fetch_resources.sh` re-copies them from a local `ArXiv_figure_injection`
 checkout, for when the upstream tables are regenerated.
 
 | file | size | used by | what it is |
