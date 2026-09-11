@@ -36,6 +36,13 @@ mpirun -np 4 python create_figures_batch.py \
     -save_dir ./synthetic_figures/ -number_of_figures 700 -nProcs 4
 ```
 
+Testing example:
+```bash
+mpirun -np 2 python create_figures_batch.py \
+    -save_dir ./synthetic_figures/ -number_of_figures 6 -nProcs 2 \
+    -resources_dir ~/ArXiv_figure_injection/resources/
+```
+
 A working LaTeX (`pdflatex`, with `amsmath` and `amssymb`) must be on `$PATH` —
 matplotlib runs with `text.usetex=True`. macOS's `/Library/TeX/texbin` is added
 automatically if present; elsewhere pass `-texbin`.
