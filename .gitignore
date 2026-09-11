@@ -1,0 +1,28 @@
+# --- python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- generated figures ---
+synthetic_figures*/
+imgs/
+jsons/
+pickles/
+diags/
+
+# --- resources: corpus-derived lookup tables, not code ---
+# populate with ./fetch_resources.sh  (see resources/README.md)
+resources/*
+!resources/README.md
+!resources/.gitkeep
+
+# --- astroquery/SkyView download cache ---
+astroquery_images/
+
+# --- logs ---
+*.log
+timing_*.csv
+
+# --- os ---
+.DS_Store

@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Populate resources/ with the static lookup tables the figure generator reads.
+#
+# They are corpus-derived artefacts of the ArXiv mining pipeline, not code, so
+# they are not tracked in this repo.  By default they are copied from a local
+# checkout of ArXiv_figure_injection; point SRC elsewhere (or rsync from the
+# cluster) if yours lives somewhere else.
+#
+#   ./fetch_resources.sh                      # copy from ~/ArXiv_figure_injection/resources
+#   ./fetch_resources.sh /path/to/resources   # copy from somewhere else
+#   ./fetch_resources.sh /path/to/resources link   # symlink instead of copy
+set -euo pipefail
+
+SRC="${1:-$HOME/ArXiv_figure_injection/resources}"
+MODE="${2:-copy}"
+DST="$(cd "$(dirname "$0")" && pwd)/resources"
+
+if [ ! -d "$SRC" ]; then
+    echo "source resources dir not found: $SRC" >&2
+    exit 1
+fi
+mkdir -p "$DST" "$DST/data"
+
+# required by every run
+FILES=(
+    "fonts.csv"                        # fonts to draw labels with
+    "data/words_cleaned.pickle"        # word counts -> "popular nouns"
+    "inlines.csv"                      # inline-math fragments
+    "inlines_unique.csv"
+    "inlines_uniques_ignore.csv"
+)
+# required only by "image of the sky" with -sky_source astroquery|both
+SKY_FILES=(
+    "object_wavelength_pairs.pickle"   # (object, wavelength, pdf) from the corpus
+)
+
+place () {
+    local rel="$1"
+    if [ ! -e "$SRC/$rel" ]; then
+        echo "  MISSING in source: $rel" >&2
+        return
+    fi
+    if [ "$MODE" = "link" ]; then
+        ln -sf "$SRC/$rel" "$DST/$rel"
+        echo "  linked  $rel"
+    else
+        cp "$SRC/$rel" "$DST/$rel"
+        echo "  copied  $rel"
+    fi
+}
+
+echo "resources: $SRC -> $DST ($MODE)"
+for f in "${FILES[@]}" "${SKY_FILES[@]}"; do place "$f"; done
+
+# Cache of (object, survey) pairs SkyView has no image for.  Large (tens of
+# thousands of per-rank csv shards) and regenerated as runs proceed, so it is
+# always linked rather than copied.
+if [ -d "$SRC/obj_survey_missing_files" ]; then
+    ln -sfn "$SRC/obj_survey_missing_files" "$DST/obj_survey_missing_files"
+    echo "  linked  obj_survey_missing_files/"
+else
+    mkdir -p "$DST/obj_survey_missing_files"
+    echo "  created empty obj_survey_missing_files/ (will be filled as you run)"
+fi
+
+echo "done."

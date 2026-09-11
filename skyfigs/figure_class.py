@@ -216,7 +216,10 @@ class FigureRun():
 
 def reset_figure(reset_labels=True, verbose=False, itries=0, **kwargs):
     #figureout = deepcopy(figure)
-    figureout = FigureRun()
+    # fullproc_r has to go through the constructor: everything else can be
+    # patched in afterwards, but the resources dir decides where FigureRun reads
+    # its fonts, nouns and inline math from
+    figureout = FigureRun(fullproc_r=kwargs.get('fullproc_r'))
     for k,v in kwargs.items():
         if k in figureout.__dict__: # in there
             if verbose:

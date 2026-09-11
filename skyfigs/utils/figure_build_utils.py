@@ -1227,8 +1227,6 @@ from .plot_parameters import fontsizes
 
 import os
 import sys
-root_folder = os.path.abspath(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.append(root_folder)
 from ..figure_class import reset_figure #, FigureRun
 
 # def check_exceptions1(e, fontsizes, font_names, 

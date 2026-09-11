@@ -1,0 +1,34 @@
+# Minimal environment for synthetic "contour" / "image of the sky" generation.
+#
+#   conda env create -f environment.yml
+#   conda activate SkyImages
+#   python -m spacy download en_core_web_sm
+#   python -c "import nltk; nltk.download('stopwords')"
+#
+# Versions are the ones this was developed and tested against (the FullProcess
+# env from ArXiv_figure_injection); they are lower bounds, not hard pins.
+#
+# A working LaTeX (pdflatex + amsmath, amssymb) must also be on $PATH --
+# matplotlib is run with text.usetex=True.  See -texbin.
+name: SkyImages
+channels:
+  - conda-forge
+dependencies:
+  - python=3.12
+  - numpy>=2.0
+  - scipy>=1.15
+  - pandas>=2.2
+  - matplotlib>=3.10
+  - pillow>=11
+  - opencv>=4.10           # cv2, used to draw the diagnostic overlays
+  - scikit-learn>=1.7      # make_blobs, for the gaussian-mixture distributions
+  - astropy>=7.0           # WCS / fits / simple_norm for sky images
+  - astroquery>=0.4.11     # SkyView cutouts
+  - nltk>=3.9              # stopword filtering for the label word pool
+  - spacy>=3.8             # noun tagging for the label word pool
+  - psutil>=5.9
+  - dill>=0.4
+  - mpi4py>=4.0            # parallel runs (the yt/ shim wraps it)
+  - pip
+  - pip:
+      - TexSoup>=0.3.1     # parsing the mined inline-math fragments

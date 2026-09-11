@@ -881,7 +881,9 @@ from astropy.utils.data import conf
 import time
 conf.show_progress = False  # This should disable the download progress messages
 from sys import path
-path.append('../') # to get yt
+from ..paths import REPO_ROOT
+if REPO_ROOT not in path:
+    path.append(REPO_ROOT)  # to get the bundled yt/ shim, whatever the cwd is
 from yt.utilities.parallel_tools.parallel_analysis_interface import communication_system
 
 _object_wavelengths_cache = {}

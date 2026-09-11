@@ -178,9 +178,14 @@ def make_random_plot(figure = None, verbose=True,
                 figure.data_save['figsize'] = figsize
                 figure.figure_params['facecolor'] = fig.get_facecolor()
                 figure.figure_params['dpi'] = dpi_out
-                kwargs['figure_params']['figsize'] = figsize
-                kwargs['figure_params']['facecolor'] = fig.get_facecolor()
-                kwargs['figure_params']['dpi'] = dpi_out
+                # the injection pipeline pins figure_params (the box the figure
+                # has to fit into) and needs these fed back so every reset
+                # reuses them.  Standalone generation passes no figure_params
+                # and wants a freshly randomised figure on each reset.
+                if kwargs.get('figure_params') is not None:
+                    kwargs['figure_params']['figsize'] = figsize
+                    kwargs['figure_params']['facecolor'] = fig.get_facecolor()
+                    kwargs['figure_params']['dpi'] = dpi_out
                 if figdraw: fig.canvas.draw() # just give it a shot here
         except Exception as e1:
             figure, kwargs = check_exceptions(e1, figure, **kwargs) 
