@@ -225,7 +225,8 @@ def reset_figure(reset_labels=True, verbose=False, itries=0, **kwargs):
     # patched in afterwards, but the resources dir decides where FigureRun reads
     # its fonts, nouns and inline math from
     figureout = FigureRun(fullproc_r=kwargs.get('fullproc_r'),
-                          panel_params=kwargs.get('panel_params'))
+                          panel_params=kwargs.get('panel_params'),
+                          tight_layout_params=kwargs.get('tight_layout_params'))
     for k,v in kwargs.items():
         if k in figureout.__dict__: # in there
             if verbose:

@@ -35,7 +35,7 @@ def make_plotplotparams(fullproc_r=None,
                         astroquery_img_dir=None,
                         plot_types=PLOT_TYPES,
                         missing_list_file=None,
-                        panel_median=4, panel_max=25,
+                        panel_min=1, panel_median=4, panel_max=25,
                         equation_prob=0.25, colorbar_prob=1.0,
                         contour_prob=1.0, sky_prob=1.0,
                         sky_from_astroquery_prob=1.0, sky_from_gmm_prob=1.0,
@@ -50,6 +50,10 @@ def make_plotplotparams(fullproc_r=None,
     missing_list_file  : cache of (object, survey) pairs SkyView has no image
                          for.  Defaults to
                          <fullproc_r>/obj_survey_missing_files/obj_survey_missing_list.csv
+    panel_min / panel_median / panel_max
+                       : panels per figure.  npanels ~ normal(median, std) is
+                         clamped to [min, max], so panel_min=2 forces every
+                         figure to be multipanel and panel_max=1 forces single.
     contour_prob / sky_prob
                        : relative weight of each plot type (normalised below).
                          Set one to 0 to generate only the other.
@@ -145,6 +149,9 @@ def make_plotplotparams(fullproc_r=None,
         plot_params_line['image of the sky']['prob'] = sky_prob
 
     ### Other params
+    # npanels is drawn from a normal(median, std) and then clamped to
+    # [min, max] -- so panel_min is the only way to guarantee multipanel
+    panel_params['number prob']['min'] = panel_min
     panel_params['number prob']['median'] = panel_median  # usually 4-ish, 1 for debugging
     panel_params['number prob']['max'] = panel_max        # 2 for debugging, 25 for a typical run
 

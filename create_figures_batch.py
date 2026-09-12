@@ -39,9 +39,12 @@ parser.add_argument("-sky_local_only", nargs='?', type=int, default=0,
                     help='1 = never query SkyView; draw real cutouts only from the '
                          '.fits already in -astroquery_img_dir. Runs offline and much '
                          'faster, but only sees objects downloaded before')
+parser.add_argument("-panel_min", nargs='?', type=int, default=1,
+                    help='fewest panels per figure; 2 forces every figure multipanel')
 parser.add_argument("-panel_median", nargs='?', type=int, default=4,
-                    help='typical number of panels per figure (1 to force single-panel)')
-parser.add_argument("-panel_max", nargs='?', type=int, default=25)
+                    help='typical number of panels per figure')
+parser.add_argument("-panel_max", nargs='?', type=int, default=25,
+                    help='most panels per figure; 1 forces every figure single-panel')
 
 # --- where the static lookup tables live ---
 parser.add_argument("-resources_dir", nargs='?', default=None,
@@ -59,7 +62,16 @@ parser.add_argument("-restart", nargs='?', type=int, default=0,
 parser.add_argument("-time_out", nargs='?', type=float, default=5,
                     help='per-stage timeout, in minutes')
 parser.add_argument("-max_tries", nargs='?', type=int, default=50,
-                    help='attempts per figure before everything is reset')
+                    help='attempts per figure before every parameter is re-randomised')
+parser.add_argument("-max_resets", nargs='?', type=int, default=10,
+                    help='give up on a figure after this many re-randomisations '
+                         '(0 = never give up, the original behaviour). Without a '
+                         'cap a hard figure retries forever')
+parser.add_argument("-layout_pad_min", nargs='?', type=float, default=0.0,
+                    help='tight_layout pad range, in font-size units. The default '
+                         '0.0-0.1 is very tight and is why multipanel figures nearly '
+                         'always fail the box-overlap check; try 0.3-1.0 for those')
+parser.add_argument("-layout_pad_max", nargs='?', type=float, default=0.1)
 parser.add_argument("-grace_ticks", nargs='?', type=int, default=5,
                     help='tick labels allowed to overlap before a figure is rejected')
 parser.add_argument("-save_diagnostic_plot", nargs='?', type=int, default=1)
@@ -143,6 +155,14 @@ if need_sky and not os.path.exists(astroquery_img_dir):
 sky_from_astroquery_prob = 1.0 if args.sky_source in ('both', 'astroquery') else 0.0
 sky_from_gmm_prob = 1.0 if args.sky_source in ('both', 'gmm') else 0.0
 sky_local_only = bool(args.sky_local_only)
+max_resets = args.max_resets if args.max_resets > 0 else None
+
+# tight_layout spacing: the upstream default samples all three pads in 0.0-0.1,
+# which crowds adjacent panels into each other's tick labels
+tight_layout_params = {'prob': 1.0,
+                       'pad':   {'min': args.layout_pad_min, 'max': args.layout_pad_max},
+                       'w_pad': {'min': args.layout_pad_min, 'max': args.layout_pad_max},
+                       'h_pad': {'min': args.layout_pad_min, 'max': args.layout_pad_max}}
 if is_root() and sky_local_only and sky_from_astroquery_prob > 0:
     from skyfigs.utils.distribution_utils import list_local_sky_images
     print('sky images: local only,', len(list_local_sky_images(astroquery_img_dir)),
@@ -153,6 +173,7 @@ plot_params, panel_params, title_params, xlabel_params, \
     font_names = make_plotplotparams(fullproc_r=resources_dir,
                                      astroquery_img_dir=astroquery_img_dir,
                                      plot_types=plot_types,
+                                     panel_min=args.panel_min,
                                      panel_median=args.panel_median,
                                      panel_max=args.panel_max,
                                      sky_from_astroquery_prob=sky_from_astroquery_prob,
@@ -174,6 +195,7 @@ figure_kwargs = dict(plot_params=plot_params,
                      linestyles=linestyles,
                      linestyles_hist=linestyles_hist,
                      font_names=font_names,
+                     tight_layout_params=tight_layout_params,
                      itriesMax=args.max_tries,
                      save_diagnostic_plot=save_diagnostic_plot,
                      fullproc_r=resources_dir)
@@ -218,8 +240,9 @@ for sto, ifigure in parallel_objects(np.arange(0, args.number_of_figures),
                                     grace_ticks=args.grace_ticks,
                                     verbose=verbose,
                                     allow_sky_image=need_sky,
+                                    max_resets=max_resets,
                                     **figure_kwargs)
-        sto.result = 'ok' if diagsout else 'failed'
+        sto.result = 'ok' if diagsout else 'gave up'
     except Exception as e:
         print('[ERROR]: figure', ifigure + 1, 'failed --', str(e))
         sto.result = 'error: ' + str(e)

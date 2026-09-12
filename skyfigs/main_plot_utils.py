@@ -78,9 +78,16 @@ def make_random_plot(figure = None, verbose=True,
                     timing_log=None, timing_rank=-1,
                     timing_article='', timing_page='', timing_fignum='',
                     allow_sky_image=True,
+                    max_resets=None,
                     **kwargs):
     """
     timeout: timeout in minutes
+    max_resets: give up on this figure after this many full re-randomisations
+                (each one is itriesMax attempts) and return None.  Upstream had
+                no give-up at all -- itries is zeroed rather than broken out of,
+                and the only return is on success -- so a figure whose per-attempt
+                success rate is very low (multipanel, mostly) spins forever.
+                None keeps that original unbounded behaviour.
     allow_sky_image: if False, the sky-image plot type is zeroed out.  A no-op when
                      plot_params was already built without it (see
                      skyfigs.plot_params_setup.make_plotplotparams).
@@ -102,6 +109,8 @@ def make_random_plot(figure = None, verbose=True,
     fig, datas, imgplot, axes_from_loop, axes_save, \
                        cbar_axes_save, cbars, plot_data_all, plot_data = [None]*9
 
+    n_resets = 0
+
     # ------- inner loop -------
     while figure.itries < figure.itriesMax and not figure.success_plot:
         gc.collect()
@@ -109,6 +118,14 @@ def make_random_plot(figure = None, verbose=True,
         figure.itries += 1
         if figure.itries >= figure.itriesMax:
             figure.itries = 0
+            n_resets += 1
+            if max_resets is not None and n_resets > max_resets:
+                if verbose:
+                    print('[GIVE UP]: no usable figure after', n_resets, 'resets of',
+                          figure.itriesMax, 'tries')
+                plt.close('all')
+                gc.collect()
+                return None
             if verbose: print('RESET EVERYBODY')
             figure.success_plot = False
             plt.close('all')
