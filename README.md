@@ -59,6 +59,19 @@ diags/Picture_000001.jpeg      the figure with the boxes drawn on it
 Re-running skips any index that already has both an image and a JSON; pass
 `-restart 1` to regenerate.
 
+### Single-panel only
+
+Multi-panel figures are not currently generatable at a usable rate (~1 success
+in thousands of attempts, against ~1 in 20-40 for single-panel). If you only
+want single-panel figures, use [`single/`](single/README.md), which is the same
+pipeline with the panel count pinned to 1:
+
+```bash
+mpirun -np 6 python single/create_figures_batch.py -save_dir ./figs/ -number_of_figures 1000 -nProcs 6
+```
+
+The script below keeps the full behaviour, multi-panel included.
+
 ### The knobs that matter
 
 | flag | default | |

@@ -24,7 +24,7 @@ from .utils.synthetic_fig_utils import get_font_params, normalize_params_prob, a
 
 from .utils.plot_check_utils import set_all_seeds, check_aspect, check_labels_titles_off_page
 
-from .utils.prechecks import fit_layout_to_canvas
+from .utils.prechecks import fit_panel_ticks
 
 from .utils.figure_build_utils import check_exceptions, make_base_plot, \
     close_plot_fail, close_plot_success, get_plot_data, \
@@ -323,6 +323,19 @@ def make_random_plot(figure = None, verbose=True,
                         #if verbose: print('[ERROR]: "generate_data" led to memory overflow')
                         if verbose: print('[ERROR]: "generate_data" created an error')
                         break # end this loop over axes
+                    # Cap this panel's x/y tick counts to what fits along each
+                    # axis, for the same reason the colorbar's are capped: the
+                    # default locator ignores how small the panel is, and
+                    # 'x-y ticks overlap' is the largest non-colorbar rejection
+                    # category for multipanel figures.  See utils/prechecks.py.
+                    try:
+                        fit_panel_ticks(ax, fig,
+                                        figure.font_params['xlabel_ticks_fontsize'],
+                                        figure.font_params['ylabel_ticks_fontsize'])
+                    except Exception as _etick:
+                        if verbose:
+                            print('  [precheck] panel tick fit skipped:', str(_etick))
+
                     # save axes
                     axes_from_loop.append(ax)
                     # save

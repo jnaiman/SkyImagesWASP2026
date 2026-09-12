@@ -234,3 +234,30 @@ def fit_layout_to_canvas(fig, pad, w_pad, h_pad,
         print('  [precheck] %d label(s) still outside canvas at pad=%.2f'
               % (len(bad), pad_used))
     return pad_used, False
+
+
+def fit_panel_ticks(ax, fig, x_fontsize, y_fontsize, verbose=False, **kwargs):
+    """
+    Cap a panel's own x/y tick counts to what fits along each axis -- the same
+    arithmetic `fit_colorbar_ticks` applies to colorbars.
+
+    Skipped for WCS axes (`image of the sky`), where the RA/DEC tick machinery
+    is wcsaxes' own and a MaxNLocator does not apply.  Returns (nx, ny), either
+    of which is None when that axis was left alone.
+    """
+    if hasattr(ax, 'coords'):      # wcsaxes -- leave its tick locator alone
+        return None, None
+
+    out = []
+    for axis, fontsize in (('x', x_fontsize), ('y', y_fontsize)):
+        n = panel_tick_capacity(ax, fig, axis, fontsize, **kwargs)
+        try:
+            getattr(ax, axis + 'axis').set_major_locator(MaxNLocator(nbins=n, prune=None))
+            out.append(n)
+        except Exception as e:
+            if verbose:
+                print('  [precheck] could not cap %s ticks: %s' % (axis, str(e)))
+            out.append(None)
+    if verbose:
+        print('  [precheck] panel ticks capped to x=%s y=%s' % (out[0], out[1]))
+    return out[0], out[1]
