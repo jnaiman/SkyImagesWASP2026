@@ -1178,12 +1178,104 @@ def pick_local_sky_image(query_imgs_dir, rng=np.random, verbose=False):
     return filename, {'object': obj_name, 'pdf': pdf, 'wavelength': ''}, [survey]
 
 
+def crop_and_resample_sky(img_data, wcs, nx, ny, verbose=False):
+    """
+    Match a real SkyView cutout to the (nx, ny) grid sampled for this panel.
+
+    Cutouts arrive at a fixed 300x300 while GMM skies are generated at a sampled
+    resolution and follow the figure's aspect ratio, so the two were trivially
+    separable -- a real image was always exactly 300x300 and always square.
+
+    Done in two steps so the sky is never distorted:
+
+      1. crop, centred, to the largest region whose aspect already equals
+         nx/ny.  Cropping changes the field of view, not the angular scale.
+      2. resample that region to exactly (ny, nx).  Because the crop already
+         has the target aspect, the scale factor is the same in both axes, so
+         arcsec/pixel stays isotropic -- the image is resampled, never stretched.
+
+    The WCS is rescaled alongside, otherwise the RA/DEC ticks would describe the
+    original grid rather than the one actually drawn.
+
+    Returns (img, wcs, transform).  `transform` records the crop origin, crop
+    size and scale factors, so the mapping from the downloaded 300x300 cutout to
+    the grid actually plotted is fully reproducible.  On any failure the inputs
+    come back untouched and `transform` is None.
+    """
+    try:
+        H, W = img_data.shape[0], img_data.shape[1]
+        nx = max(1, int(nx)); ny = max(1, int(ny))
+        target_aspect = float(nx) / float(ny)          # width / height
+
+        # 1. centred crop to the target aspect
+        if float(W) / float(H) > target_aspect:        # too wide -> trim width
+            Wc, Hc = int(round(H * target_aspect)), H
+        else:                                          # too tall -> trim height
+            Wc, Hc = W, int(round(W / target_aspect))
+        Wc = int(np.clip(Wc, 1, W)); Hc = int(np.clip(Hc, 1, H))
+        x0, y0 = (W - Wc) // 2, (H - Hc) // 2
+
+        img_c = img_data[y0:y0 + Hc, x0:x0 + Wc]
+        wcs_c = wcs
+        if wcs is not None:
+            try:
+                wcs_c = wcs[y0:y0 + Hc, x0:x0 + Wc]
+            except Exception:
+                wcs_c = wcs
+
+        # 2. resample to exactly (ny, nx) -- equal factors, so no stretch
+        zy = Hc / float(ny)
+        zx = Wc / float(nx)
+        yi = np.clip(np.round((np.arange(ny) + 0.5) * zy - 0.5), 0, Hc - 1).astype(int)
+        xi = np.clip(np.round((np.arange(nx) + 0.5) * zx - 0.5), 0, Wc - 1).astype(int)
+        img_r = img_c[yi[:, None], xi[None, :]]
+
+        # carry the WCS through the resample
+        wcs_r = wcs_c
+        if wcs_c is not None:
+            try:
+                wcs_r = wcs_c.deepcopy()
+                cr = wcs_c.wcs.crpix
+                wcs_r.wcs.crpix = [(cr[0] - 0.5) / zx + 0.5,
+                                   (cr[1] - 0.5) / zy + 0.5]
+                if wcs_c.wcs.has_cd():
+                    cd = wcs_c.wcs.cd.copy()
+                    cd[:, 0] *= zx      # column 0 is the x pixel axis
+                    cd[:, 1] *= zy
+                    wcs_r.wcs.cd = cd
+                else:
+                    cdelt = list(wcs_c.wcs.cdelt)
+                    cdelt[0] *= zx
+                    cdelt[1] *= zy
+                    wcs_r.wcs.cdelt = cdelt
+            except Exception as ew:
+                if verbose:
+                    print('    [sky] could not rescale WCS, keeping cropped one:', str(ew))
+                wcs_r = wcs_c
+
+        if verbose:
+            print('    [sky] %dx%d -> crop %dx%d -> resample %dx%d (scale x%.2f, y%.2f)'
+                  % (W, H, Wc, Hc, nx, ny, zx, zy))
+        transform = {'fetched size (w,h)': (int(W), int(H)),
+                     'crop origin (x0,y0)': (int(x0), int(y0)),
+                     'crop size (w,h)': (int(Wc), int(Hc)),
+                     'resampled to (nx,ny)': (int(nx), int(ny)),
+                     'scale factor (x,y)': (float(zx), float(zy)),
+                     'method': 'nearest-neighbour index map'}
+        return img_r, wcs_r, transform
+    except Exception as e:
+        if verbose:
+            print('    [sky] crop/resample skipped:', str(e))
+        return img_data, wcs, None
+
+
 def get_sky_image_data(plot_params,
                    cmin=0, cmax=1, 
                    verbose=False, rng=np.random, timer_pause=1.0, 
                    overwrite = False, pick_random_survey = False, 
                    height=300, width=300, warning_verbose=False, 
                    verbose_get_images = False,
+                   nx=None, ny=None,
                    **kwargs):
     """
     npoints : can be tuple if multi dimension
@@ -1372,6 +1464,22 @@ def get_sky_image_data(plot_params,
                     print('[WARNING]: img_data is all NaNs for file:', filename)
                 filename = None
 
+    # Match the sampled (nx, ny) grid so real cutouts and GMM skies share one
+    # resolution and aspect distribution.  See crop_and_resample_sky.
+    fetched_shape = img_data.shape
+    # keep the WCS of the file as downloaded -- the one below is overwritten to
+    # describe the resampled grid, and without this the original cutout could
+    # not be reconstructed from the json alone
+    wcs_fetched_header = None
+    try:
+        wcs_fetched_header = wcs.to_header_string()
+    except Exception:
+        pass
+    sky_transform = None
+    if nx is not None and ny is not None:
+        img_data, wcs, sky_transform = crop_and_resample_sky(img_data, wcs, nx, ny,
+                                                             verbose=verbose)
+
     # # get renorm
     # norm = simple_norm(img_data, image_renorm, percent=99)
 
@@ -1379,12 +1487,22 @@ def get_sky_image_data(plot_params,
     data_params['WCS'] = wcs
     # also save simple string version
     data_params['WCS header string'] = wcs.to_header_string()
+    # WCS of the downloaded .fits, before cropping/resampling
+    data_params['WCS header string (fetched)'] = wcs_fetched_header
     data_params['sky image params'] = {'filename':filename, 
                                        'header':hdu.header,
                                        'object':obj['object'], 
                                        'pdf':obj['pdf'],
                                        'survey':survey, 
-                                       'original img size':img_data.shape}
+                                       # the grid actually returned -- plot_utils
+                                       # uses this for the display crop
+                                       'original img size':img_data.shape,
+                                       # what SkyView was queried at, before
+                                       # cropping/resampling
+                                       'fetched img size':fetched_shape,
+                                       # how to get from the downloaded file to
+                                       # the grid above
+                                       'resample transform':sky_transform}
 
     # xs,ys are just the pixel coords
     xs = np.arange(0,img_data.shape[1])

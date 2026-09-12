@@ -36,6 +36,7 @@ def make_plotplotparams(fullproc_r=None,
                         plot_types=PLOT_TYPES,
                         missing_list_file=None,
                         panel_min=1, panel_median=4, panel_max=25,
+                        sky_npoints_min=50, sky_npoints_max=300,
                         equation_prob=0.25, colorbar_prob=1.0,
                         contour_prob=1.0, sky_prob=1.0,
                         sky_from_astroquery_prob=1.0, sky_from_gmm_prob=1.0,
@@ -54,6 +55,10 @@ def make_plotplotparams(fullproc_r=None,
                        : panels per figure.  npanels ~ normal(median, std) is
                          clamped to [min, max], so panel_min=2 forces every
                          figure to be multipanel and panel_max=1 forces single.
+    sky_npoints_min / sky_npoints_max
+                       : grid the sky image is drawn on, shared by both the real
+                         and the GMM path so their resolutions are drawn from
+                         one distribution.
     contour_prob / sky_prob
                        : relative weight of each plot type (normalised below).
                          Set one to 0 to generate only the other.
@@ -141,9 +146,14 @@ def make_plotplotparams(fullproc_r=None,
         # image or lines
         plot_params_line['image of the sky']['image or contour']['prob']['image'] = 1000
 
-        # lower resolution?
-        plot_params_line['image of the sky']['npoints'] = {'nx': {'min': 10, 'max': 100},
-                                                           'ny': {'min': 10, 'max': 100}}
+        # Grid the sky image is drawn on.  Both distributions draw nx from this
+        # range and take ny = nx / aspect_ratio: a GMM sky is generated at that
+        # size, and a real SkyView cutout (fetched at 300x300) is cropped to the
+        # same aspect and resampled onto it.  Keeping one range for both is what
+        # stops "300x300 and square" from identifying the real ones.
+        plot_params_line['image of the sky']['npoints'] = {
+            'nx': {'min': sky_npoints_min, 'max': sky_npoints_max},
+            'ny': {'min': sky_npoints_min, 'max': sky_npoints_max}}
 
         # prob of getting an image of the sky
         plot_params_line['image of the sky']['prob'] = sky_prob

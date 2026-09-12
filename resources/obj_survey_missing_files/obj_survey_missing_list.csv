@@ -12224,3 +12224,60 @@ HD  52081,SHASSA H,1974AJ_____79_1022C,no survey
 HD  52081,SHASSA CC,1974AJ_____79_1022C,no survey
 HD  52081,SHASSA C,1974AJ_____79_1022C,no survey
 HD  52081,SHASSA Sm,1974AJ_____79_1022C,no survey
+HD 169119,DSS2 Blue,1984ApJS___55__101C,no survey
+*  27 Mon,Mellinger Red,1982ApJ___260__655Z,exception
+*  27 Mon,Mellinger Green,1982ApJ___260__655Z,exception
+*  27 Mon,Mellinger Blue,1982ApJ___260__655Z,exception
+*  27 Mon,SHASSA H,1982ApJ___260__655Z,no survey
+*  27 Mon,SHASSA CC,1982ApJ___260__655Z,no survey
+*  27 Mon,SHASSA C,1982ApJ___260__655Z,no survey
+*  27 Mon,SHASSA Sm,1982ApJ___260__655Z,no survey
+HD 173740,Mellinger Red,1996AJ____112_2238S,exception
+HD 173740,Mellinger Green,1996AJ____112_2238S,exception
+HD 173740,Mellinger Blue,1996AJ____112_2238S,exception
+HD 173740,SHASSA H,1996AJ____112_2238S,no survey
+HD 173740,SHASSA CC,1996AJ____112_2238S,no survey
+HD 173740,SHASSA C,1996AJ____112_2238S,no survey
+HD 173740,SHASSA Sm,1996AJ____112_2238S,no survey
+Bol D150,SHASSA H,1992AJ____103__824R,no survey
+Bol D150,SHASSA CC,1992AJ____103__824R,no survey
+Bol D150,SHASSA C,1992AJ____103__824R,no survey
+Bol D150,SHASSA Sm,1992AJ____103__824R,no survey
+Cl* NGC 7078     SS      11,DSS,1995AJ____110__704S,no survey
+Cl* NGC 7078     SS      11,DSS1 Blue,1995AJ____110__704S,no survey
+Cl* NGC 7078     SS      11,DSS1 Red,1995AJ____110__704S,no survey
+Cl* NGC 7078     SS      11,DSS2 Red,1995AJ____110__704S,no survey
+Cl* NGC 7078     SS      11,DSS2 Blue,1995AJ____110__704S,no survey
+Cl* NGC 7078     SS      11,DSS2 IR,1995AJ____110__704S,no survey
+MCG+04-33-028,Mellinger Red,1987ApJS___63__265W,exception
+MCG+04-33-028,Mellinger Green,1987ApJS___63__265W,exception
+MCG+04-33-028,Mellinger Blue,1987ApJS___63__265W,exception
+MCG+04-33-028,SHASSA H,1987ApJS___63__265W,no survey
+MCG+04-33-028,SHASSA CC,1987ApJS___63__265W,no survey
+MCG+04-33-028,SHASSA C,1987ApJS___63__265W,no survey
+MCG+04-33-028,SHASSA Sm,1987ApJS___63__265W,no survey
+V* V4237 Sgr,Mellinger Red,1992AJ____103_1872B,exception
+V* V4237 Sgr,Mellinger Green,1992AJ____103_1872B,exception
+V* V4237 Sgr,Mellinger Blue,1992AJ____103_1872B,exception
+V* V4237 Sgr,SHASSA H,1992AJ____103_1872B,no survey
+V* V4237 Sgr,SHASSA CC,1992AJ____103_1872B,no survey
+V* V4237 Sgr,SHASSA C,1992AJ____103_1872B,no survey
+V* V4237 Sgr,SHASSA Sm,1992AJ____103_1872B,no survey
+ESO  85-47,Mellinger Red,1995ApJS___96___39B,exception
+ESO  85-47,Mellinger Green,1995ApJS___96___39B,exception
+ESO  85-47,Mellinger Blue,1995ApJS___96___39B,exception
+ESO  85-47,SHASSA H,1995ApJS___96___39B,no survey
+ESO  85-47,SHASSA CC,1995ApJS___96___39B,no survey
+ESO  85-47,SHASSA C,1995ApJS___96___39B,no survey
+ESO  85-47,SHASSA Sm,1995ApJS___96___39B,no survey
+PMN J0114-3302,CO,1996ApJS__103__145W,no survey
+PMN J0114-3302,VLA FIRST (1.4 GHz),1996ApJS__103__145W,no survey
+PMN J0114-3302,Stripe82VLA,1996ApJS__103__145W,no survey
+PMN J0114-3302,EBHIS,1996ApJS__103__145W,no survey
+UGC  3843,Mellinger Red,1996AJ____112_1803M,exception
+UGC  3843,Mellinger Green,1996AJ____112_1803M,exception
+UGC  3843,Mellinger Blue,1996AJ____112_1803M,exception
+UGC  3843,SHASSA H,1996AJ____112_1803M,no survey
+UGC  3843,SHASSA CC,1996AJ____112_1803M,no survey
+UGC  3843,SHASSA C,1996AJ____112_1803M,no survey
+UGC  3843,SHASSA Sm,1996AJ____112_1803M,no survey

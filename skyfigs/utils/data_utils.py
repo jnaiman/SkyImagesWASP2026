@@ -340,9 +340,13 @@ def get_image_of_the_sky_data(plot_params, distribution = 'random',
         #print('[ERROR]: not implemented yet!', distribution)
         #distparams = plot_params['distribution']['sky'] # sky image info
         #distparams['xy labels ra/dec'] = plot_params['xy labels ra/dec'] # pass RA/DEC formats
+        # nx/ny were sampled above for both distributions; pass them through so a
+        # real cutout ends up on the same grid a GMM sky would have used,
+        # instead of always coming back as the fetched 300x300
         xs,ys,colors, data_params = get_sky_image_data(plot_params,
                         cmin=dirminsmaxs['cmin'], 
                         cmax=dirminsmaxs['cmax'], 
+                        nx=nx, ny=ny,
                         rng=rng, verbose=verbose, **kwargs)
         # to avoid FITS memory issues with stretch, take out outliers
         norm = simple_norm(colors, image_renorm, percent=99)

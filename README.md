@@ -157,6 +157,44 @@ what the axes are:
 
 ---
 
+## Sky image resolution
+
+Both sky sources are drawn on the **same** grid distribution, so that resolution
+and aspect cannot be used to tell a real cutout from a synthetic one. `nx` is
+sampled from `-sky_npoints_min .. -sky_npoints_max` (default 50-300) and
+`ny = nx / aspect_ratio`; a GMM sky is generated at that size, and a real
+SkyView cutout is brought onto it.
+
+Real cutouts are still **downloaded and cached at 300x300** — nothing on disk in
+`-astroquery_img_dir` is modified. Only the in-memory array is changed, in two
+steps (`crop_and_resample_sky` in `skyfigs/utils/distribution_utils.py`):
+
+1. a centred **crop** to the largest region whose aspect already equals `nx/ny`
+   — this changes the field of view, not the angular scale;
+2. a **resample** of that region onto exactly `(ny, nx)`. Because the crop
+   already has the target aspect, the scale factor is the same in both axes, so
+   arcsec/pixel stays isotropic — the sky is resampled, never stretched.
+
+The WCS is rescaled to match, or the RA/DEC ticks would describe the original
+grid rather than the one drawn. Both WCSs are kept in the json:
+
+| field | |
+|---|---|
+| `data params/WCS header string` | the grid actually plotted |
+| `data params/WCS header string (fetched)` | the `.fits` as downloaded |
+| `sky image params/filename` | the cached cutout, still 300x300 on disk |
+| `sky image params/fetched img size` | what SkyView was queried at |
+| `sky image params/resample transform` | crop origin, crop size, scale factors |
+
+so the original download can be reproduced from the json alone. The resample is
+nearest-neighbour, so pixel centres quantise to the source grid — the plotted
+and fetched WCS can disagree on the field centre by up to half a source pixel.
+
+Before this, real cutouts were always exactly 300x300 and always square while
+GMM skies were 10-100 and aspect-shaped, which made the two trivially separable.
+
+---
+
 ## Provenance
 
 Everything below is a copy from `~/ArXiv_figure_injection`. Filenames are
