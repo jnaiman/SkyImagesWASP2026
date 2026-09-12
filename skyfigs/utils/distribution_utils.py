@@ -1180,92 +1180,111 @@ def pick_local_sky_image(query_imgs_dir, rng=np.random, verbose=False):
 
 def crop_and_resample_sky(img_data, wcs, nx, ny, verbose=False):
     """
-    Match a real SkyView cutout to the (nx, ny) grid sampled for this panel.
+    Put a real SkyView cutout onto (about) the (nx, ny) grid sampled for this
+    panel, without altering a single pixel value.
 
     Cutouts arrive at a fixed 300x300 while GMM skies are generated at a sampled
     resolution and follow the figure's aspect ratio, so the two were trivially
     separable -- a real image was always exactly 300x300 and always square.
 
-    Done in two steps so the sky is never distorted:
+    The mapping is a centred crop plus **integer decimation**:
 
-      1. crop, centred, to the largest region whose aspect already equals
-         nx/ny.  Cropping changes the field of view, not the angular scale.
-      2. resample that region to exactly (ny, nx).  Because the crop already
-         has the target aspect, the scale factor is the same in both axes, so
-         arcsec/pixel stays isotropic -- the image is resampled, never stretched.
+      * pick the largest integer k with nx*k <= W and ny*k <= H, so as much of
+        the field of view is kept as possible;
+      * crop, centred, to nx*k by ny*k -- this has exactly the requested aspect;
+      * take every k-th pixel, starting at offset (k-1)//2.
 
-    The WCS is rescaled alongside, otherwise the RA/DEC ticks would describe the
-    original grid rather than the one actually drawn.
+    Every output pixel is therefore an *original* pixel value -- no averaging,
+    no interpolation -- and because the index map is exactly affine, the WCS
+    rescaling below is exact too: the plotted WCS and the WCS of the downloaded
+    file agree to machine precision, with no half-pixel slop.  The same k is
+    used on both axes, so arcsec/pixel stays isotropic and the sky is never
+    stretched.
 
-    Returns (img, wcs, transform).  `transform` records the crop origin, crop
-    size and scale factors, so the mapping from the downloaded 300x300 cutout to
-    the grid actually plotted is fully reproducible.  On any failure the inputs
-    come back untouched and `transform` is None.
+    nx/ny are honoured exactly unless they exceed the source, in which case they
+    are clamped to it (and the aspect moves with them).
+
+    Returns (img, wcs, transform).  `transform` records the crop origin, the
+    decimation factor and the grid actually produced, so the mapping from the
+    downloaded cutout to the plotted array is fully reproducible.  On any
+    failure the inputs come back untouched and `transform` is None.
     """
     try:
-        H, W = img_data.shape[0], img_data.shape[1]
-        nx = max(1, int(nx)); ny = max(1, int(ny))
-        target_aspect = float(nx) / float(ny)          # width / height
+        H, W = int(img_data.shape[0]), int(img_data.shape[1])
+        nx_req, ny_req = int(nx), int(ny)
 
-        # 1. centred crop to the target aspect
-        if float(W) / float(H) > target_aspect:        # too wide -> trim width
-            Wc, Hc = int(round(H * target_aspect)), H
-        else:                                          # too tall -> trim height
-            Wc, Hc = W, int(round(W / target_aspect))
-        Wc = int(np.clip(Wc, 1, W)); Hc = int(np.clip(Hc, 1, H))
+        # cannot ask for more pixels than the source has
+        nx = int(np.clip(nx_req, 1, W))
+        ny = int(np.clip(ny_req, 1, H))
+
+        # largest integer decimation that still fits -> largest field of view
+        k = max(1, min(W // nx, H // ny))
+
+        # Prefer an ODD k.  The sample offset within each block is (k-1)/2, which
+        # is only a whole pixel when k is odd; with even k the sampled grid sits
+        # half a source pixel off the crop centre.  Stepping up to k+1 and
+        # shrinking nx/ny by k/(k+1) keeps the crop -- and so the field of view --
+        # essentially unchanged and the aspect ratio intact, at the cost of a
+        # slightly coarser grid than asked for.  This is the "truer to the
+        # original image" trade: exact centring and exact pixel provenance, with
+        # nx/ny landing near rather than on the requested values.
+        if k % 2 == 0:
+            k_odd = k + 1
+            nx_odd = max(1, (nx * k) // k_odd)
+            ny_odd = max(1, (ny * k) // k_odd)
+            if nx_odd * k_odd <= W and ny_odd * k_odd <= H:
+                k, nx, ny = k_odd, nx_odd, ny_odd
+
+        Wc, Hc = nx * k, ny * k
         x0, y0 = (W - Wc) // 2, (H - Hc) // 2
+        off = (k - 1) // 2          # centre of each k-block when k is odd
 
-        img_c = img_data[y0:y0 + Hc, x0:x0 + Wc]
-        wcs_c = wcs
+        xi = x0 + np.arange(nx) * k + off
+        yi = y0 + np.arange(ny) * k + off
+        img_r = img_data[yi[:, None], xi[None, :]]
+
+        # carry the WCS through crop + decimation, exactly.
+        # source pixel (0-based) i = x0 + j*k + off, so in FITS 1-based terms
+        # crpix_new = (crpix_src - x0 - off - 1 + k) / k, and the pixel scale
+        # grows by k on both axes.
+        wcs_r = wcs
         if wcs is not None:
             try:
-                wcs_c = wcs[y0:y0 + Hc, x0:x0 + Wc]
-            except Exception:
-                wcs_c = wcs
-
-        # 2. resample to exactly (ny, nx) -- equal factors, so no stretch
-        zy = Hc / float(ny)
-        zx = Wc / float(nx)
-        yi = np.clip(np.round((np.arange(ny) + 0.5) * zy - 0.5), 0, Hc - 1).astype(int)
-        xi = np.clip(np.round((np.arange(nx) + 0.5) * zx - 0.5), 0, Wc - 1).astype(int)
-        img_r = img_c[yi[:, None], xi[None, :]]
-
-        # carry the WCS through the resample
-        wcs_r = wcs_c
-        if wcs_c is not None:
-            try:
-                wcs_r = wcs_c.deepcopy()
-                cr = wcs_c.wcs.crpix
-                wcs_r.wcs.crpix = [(cr[0] - 0.5) / zx + 0.5,
-                                   (cr[1] - 0.5) / zy + 0.5]
-                if wcs_c.wcs.has_cd():
-                    cd = wcs_c.wcs.cd.copy()
-                    cd[:, 0] *= zx      # column 0 is the x pixel axis
-                    cd[:, 1] *= zy
+                wcs_r = wcs.deepcopy()
+                cr = wcs.wcs.crpix
+                wcs_r.wcs.crpix = [(cr[0] - x0 - off - 1 + k) / float(k),
+                                   (cr[1] - y0 - off - 1 + k) / float(k)]
+                if wcs.wcs.has_cd():
+                    cd = wcs.wcs.cd.copy()
+                    cd[:, 0] *= k
+                    cd[:, 1] *= k
                     wcs_r.wcs.cd = cd
                 else:
-                    cdelt = list(wcs_c.wcs.cdelt)
-                    cdelt[0] *= zx
-                    cdelt[1] *= zy
+                    cdelt = list(wcs.wcs.cdelt)
+                    cdelt[0] *= k
+                    cdelt[1] *= k
                     wcs_r.wcs.cdelt = cdelt
             except Exception as ew:
                 if verbose:
-                    print('    [sky] could not rescale WCS, keeping cropped one:', str(ew))
-                wcs_r = wcs_c
+                    print('    [sky] could not rescale WCS, leaving image alone:', str(ew))
+                return img_data, wcs, None
 
         if verbose:
-            print('    [sky] %dx%d -> crop %dx%d -> resample %dx%d (scale x%.2f, y%.2f)'
-                  % (W, H, Wc, Hc, nx, ny, zx, zy))
-        transform = {'fetched size (w,h)': (int(W), int(H)),
+            print('    [sky] %dx%d -> crop %dx%d at (%d,%d) -> every %d px -> %dx%d'
+                  % (W, H, Wc, Hc, x0, y0, k, nx, ny))
+
+        transform = {'fetched size (w,h)': (W, H),
+                     'requested grid (nx,ny)': (nx_req, ny_req),
                      'crop origin (x0,y0)': (int(x0), int(y0)),
                      'crop size (w,h)': (int(Wc), int(Hc)),
-                     'resampled to (nx,ny)': (int(nx), int(ny)),
-                     'scale factor (x,y)': (float(zx), float(zy)),
-                     'method': 'nearest-neighbour index map'}
+                     'decimation k': int(k),
+                     'sample offset': int(off),
+                     'grid (nx,ny)': (int(nx), int(ny)),
+                     'method': 'integer decimation (original pixel values kept)'}
         return img_r, wcs_r, transform
     except Exception as e:
         if verbose:
-            print('    [sky] crop/resample skipped:', str(e))
+            print('    [sky] crop/decimate skipped:', str(e))
         return img_data, wcs, None
 
 
