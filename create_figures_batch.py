@@ -25,6 +25,11 @@ parser.add_argument("-save_dir", nargs='?',
                     default="~/Dropbox/wwt_image_extraction/FullProcess_resources/synthetic_figures_sky/",
                     help='where imgs/, jsons/, pickles/ and diags/ are written')
 parser.add_argument("-number_of_figures", nargs='?', type=int, default=700)
+parser.add_argument("-start_index", nargs='?', type=int, default=0,
+                    help='first figure index this run owns; it writes '
+                         'Picture_<start_index+1> .. Picture_<start_index+number_of_figures>. '
+                         'Give each plot-type batch a disjoint range so a gap left by '
+                         'one is never back-filled by another with different settings')
 parser.add_argument("-nProcs", nargs='?', type=int, default=2,
                     help='work-chunk count handed to yt parallel_objects')
 
@@ -39,6 +44,13 @@ parser.add_argument("-sky_local_only", nargs='?', type=int, default=0,
                     help='1 = never query SkyView; draw real cutouts only from the '
                          '.fits already in -astroquery_img_dir. Runs offline and much '
                          'faster, but only sees objects downloaded before')
+parser.add_argument("-colorbar_prob", nargs='?', type=float, default=1.0,
+                    help='probability a panel gets its own colorbar. At 1.0 every '
+                         'panel in a multipanel figure carries one, and their tick '
+                         'labels collide -- the dominant multipanel rejection')
+parser.add_argument("-fontsize_min", nargs='?', type=int, default=10,
+                    help='floor for shrinking fonts when boxes overlap; once hit, '
+                         'the figure is abandoned and re-randomised')
 parser.add_argument("-panel_min", nargs='?', type=int, default=1,
                     help='fewest panels per figure; 2 forces every figure multipanel')
 parser.add_argument("-panel_median", nargs='?', type=int, default=4,
@@ -68,10 +80,16 @@ parser.add_argument("-max_resets", nargs='?', type=int, default=10,
                          '(0 = never give up, the original behaviour). Without a '
                          'cap a hard figure retries forever')
 parser.add_argument("-layout_pad_min", nargs='?', type=float, default=0.0,
-                    help='tight_layout pad range, in font-size units. The default '
-                         '0.0-0.1 is very tight and is why multipanel figures nearly '
-                         'always fail the box-overlap check; try 0.3-1.0 for those')
+                    help='tight_layout pad between the FIGURE EDGE and the subplots, '
+                         'in font-size units. Keep this small (0.0-0.1) so labels can '
+                         'sit right against the canvas edge -- that is deliberate')
 parser.add_argument("-layout_pad_max", nargs='?', type=float, default=0.1)
+parser.add_argument("-layout_subpad_min", nargs='?', type=float, default=0.0,
+                    help='tight_layout w_pad/h_pad, the gap BETWEEN adjacent panels. '
+                         'Unrelated to canvas-edge behaviour, and only has any effect '
+                         'when there is more than one panel. Widening this is what '
+                         'stops one panel\'s labels colliding with its neighbour')
+parser.add_argument("-layout_subpad_max", nargs='?', type=float, default=0.1)
 parser.add_argument("-grace_ticks", nargs='?', type=int, default=5,
                     help='tick labels allowed to overlap before a figure is rejected')
 parser.add_argument("-save_diagnostic_plot", nargs='?', type=int, default=1)
@@ -122,6 +140,9 @@ from yt.funcs import is_root
 
 turn_on_parallelism()
 
+from skyfigs.utils.plot_parameters import fontsizes as _fontsizes
+_fontsizes['fontsize min'] = args.fontsize_min   # read by main_plot_utils' checks
+
 from skyfigs.paths import get_resources_dir, check_resources
 from skyfigs.plot_params_setup import make_plotplotparams
 from skyfigs.main_plot_utils import make_random_plot
@@ -160,9 +181,11 @@ max_resets = args.max_resets if args.max_resets > 0 else None
 # tight_layout spacing: the upstream default samples all three pads in 0.0-0.1,
 # which crowds adjacent panels into each other's tick labels
 tight_layout_params = {'prob': 1.0,
-                       'pad':   {'min': args.layout_pad_min, 'max': args.layout_pad_max},
-                       'w_pad': {'min': args.layout_pad_min, 'max': args.layout_pad_max},
-                       'h_pad': {'min': args.layout_pad_min, 'max': args.layout_pad_max}}
+                       # canvas edge -- keep tight, labels may touch the boundary
+                       'pad':   {'min': args.layout_pad_min,    'max': args.layout_pad_max},
+                       # between panels -- independent of the edge behaviour
+                       'w_pad': {'min': args.layout_subpad_min, 'max': args.layout_subpad_max},
+                       'h_pad': {'min': args.layout_subpad_min, 'max': args.layout_subpad_max}}
 if is_root() and sky_local_only and sky_from_astroquery_prob > 0:
     from skyfigs.utils.distribution_utils import list_local_sky_images
     print('sky images: local only,', len(list_local_sky_images(astroquery_img_dir)),
@@ -173,6 +196,7 @@ plot_params, panel_params, title_params, xlabel_params, \
     font_names = make_plotplotparams(fullproc_r=resources_dir,
                                      astroquery_img_dir=astroquery_img_dir,
                                      plot_types=plot_types,
+                                     colorbar_prob=args.colorbar_prob,
                                      panel_min=args.panel_min,
                                      panel_median=args.panel_median,
                                      panel_max=args.panel_max,
@@ -215,7 +239,9 @@ def already_have(ifigure):
 plt.close('all')
 
 my_storage = {}
-for sto, ifigure in parallel_objects(np.arange(0, args.number_of_figures),
+_first = args.start_index
+_last = args.start_index + args.number_of_figures
+for sto, ifigure in parallel_objects(np.arange(_first, _last),
                                      args.nProcs, storage=my_storage):
     sto.result_id = ifigure
 
@@ -257,3 +283,5 @@ if is_root():
     print('')
     print('-- Done --', counts)
     print('figures in:', fake_figs_dir + 'imgs/')
+    print('index range: Picture_%s .. Picture_%s'
+          % (str(_first + 1).zfill(6), str(_last).zfill(6)))

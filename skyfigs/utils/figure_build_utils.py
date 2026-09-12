@@ -277,7 +277,19 @@ from .synthetic_fig_utils import get_titles_or_labels
 #                             labelbottom=bottom, labeltop=top, 
 #                             labelleft=left, labelright=right)
 #     return cbar
-def colorbar_mods(cbar, side, fig, verbose=False):
+def colorbar_mods(cbar, side, fig, verbose=False, fit_ticks=True, cbar_fontsize=None):
+    # Cap the tick count to what actually fits along the bar.  Without this,
+    # matplotlib's locator puts ~5 ticks on a colorbar regardless of how short
+    # it is, and in a multipanel figure those labels collide -- by far the
+    # largest single cause of rejected figures.  See utils/prechecks.py.
+    if fit_ticks and cbar is not None and cbar_fontsize is not None:
+        try:
+            from .prechecks import fit_colorbar_ticks
+            fit_colorbar_ticks(cbar, fig, side, cbar_fontsize, verbose=verbose)
+        except Exception as _e:
+            if verbose:
+                print('  [precheck] colorbar tick fit skipped:', str(_e))
+
     # axis labels slide
     bottom = False; top = False; right = False; left = False
     in_or_out = np.random.choice(['in','out'])
@@ -368,7 +380,8 @@ def set_cbar_fonts(fig, cbar, colorbar_words, side, font_params, verbose=True):
                     cbar.coords[icoord].tick_params(labelsize=font_params['colorbar_ticks_fontsize'])
 
         # mod colorbar to turn off other axis
-        cbar = colorbar_mods(cbar, side, fig)
+        cbar = colorbar_mods(cbar, side, fig,
+                             cbar_fontsize=font_params['colorbar_ticks_fontsize'])
     return cbar
 
 
@@ -455,7 +468,8 @@ def parse_colorbar_data(figure, fig, iplot,
                 cbar.set_label(colorbar_words, fontsize=colorbar_fontsize, **csfont)
                 if figdraw: _safe_canvas_draw(fig) # not sure this actually has to be here...
 
-            cbar = colorbar_mods(cbar, data_from_plot['color bar params']['side'], fig)
+            cbar = colorbar_mods(cbar, data_from_plot['color bar params']['side'], fig,
+                                 cbar_fontsize=colorbar_fontsize)
 
             #cbars.append(cbar)
             #cbar_labels.append(colorbar_label)
@@ -496,7 +510,8 @@ def parse_colorbar_data(figure, fig, iplot,
             elif colorbar_words is not None:
                 cbar.set_label(colorbar_words, fontsize=colorbar_fontsize, **csfont)
                 if figdraw: _safe_canvas_draw(fig) # not sure this actually has to be here...
-            cbar = colorbar_mods(cbar, data_from_plot['color bar params']['side'], fig)
+            cbar = colorbar_mods(cbar, data_from_plot['color bar params']['side'], fig,
+                                 cbar_fontsize=colorbar_fontsize)
 
     if cbar is not None: # and colorbar_words is not None:
         cbar = set_cbar_fonts(fig, cbar, colorbar_words, 

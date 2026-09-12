@@ -24,6 +24,8 @@ from .utils.synthetic_fig_utils import get_font_params, normalize_params_prob, a
 
 from .utils.plot_check_utils import set_all_seeds, check_aspect, check_labels_titles_off_page
 
+from .utils.prechecks import fit_layout_to_canvas
+
 from .utils.figure_build_utils import check_exceptions, make_base_plot, \
     close_plot_fail, close_plot_success, get_plot_data, \
     fill_datas, generate_data, collect_saved_labels, parse_colorbar_data, detect_cb_axes, collect_boxes, \
@@ -524,6 +526,12 @@ def make_random_plot(figure = None, verbose=True,
         # save the fig
         success_save = False
         try:
+            # NOTE: prechecks.fit_layout_to_canvas() would grow pad on demand to
+            # keep labels inside the canvas.  Measured, it did not improve the
+            # multipanel success rate and it forced pad up on ~25% of
+            # single-panel figures that were already fine -- which would destroy
+            # the deliberate "labels right at the canvas edge" look.  Left
+            # available in prechecks.py but deliberately not used here.
             for iformat in img_format:
                 fig.tight_layout(h_pad=figure.figure_params['layout h_pad'], w_pad=figure.figure_params['layout w_pad'], pad=figure.figure_params['layout pad'])
                 figure_name = figure.figure_name
