@@ -415,10 +415,22 @@ def add_annotations_v1(imgplot, datas_plot, verbose = True, csize = 5, img = Non
             elif v['type'] == 'image of the sky':
                 # get mods
                 if 'sky image params' in v['data']['data params']:
-                    ymod = v['data']['data params']['sky image params']['original img size'][1]
-                    xmod = v['data']['data params']['sky image params']['original img size'][0]
-                    #xmod, ymod = translate_xsys(xmod,ymod, img.shape, new_canvas=new_canvas, no_subtract = True) 
-                    mx = 1 # should this be 1 or 0?
+                    # The grid was unravelled in pixel_location_utils as
+                    #     for x in xsc1:  for y in ysc1:  ...
+                    # so index = ix*ny + iy, and BOTH the divisor for the x index
+                    # and the modulus for the y index are ny -- 'original img
+                    # size' is (ny, nx), so both come from [0].
+                    #
+                    # This previously took ymod from [1] (= nx) and offset the
+                    # index by mx = 1.  Both are wrong, but were invisible while
+                    # every cutout was a square 300x300, where nx == ny and the
+                    # one-element offset is lost among 90,000 points.  Sky images
+                    # are no longer square, so the y filter selected the wrong
+                    # rows and the drawn grid spilled outside the plot box.
+                    ny_grid = v['data']['data params']['sky image params']['original img size'][0]
+                    ymod = ny_grid
+                    xmod = ny_grid
+                    mx = 0
                 if v['data pixels']['image'] != {}:
                     xs = v['data pixels']['image']['xsc']
                     ys = v['data pixels']['image']['ysc']
