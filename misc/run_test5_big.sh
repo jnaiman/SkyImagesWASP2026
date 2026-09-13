@@ -3,7 +3,10 @@
 #
 #   Phase 1: reach TARGET (default 500) figures of each of the three kinds.
 #   Phase 2: keep going, adding CHUNK (default 50) more of each kind per round,
-#            until MAX_PER_TYPE (default 1000, i.e. 3000 total) is reached.
+#            until MAX_PER_TYPE (default 667, i.e. 2001 total) is reached.
+#
+# 667/type rather than a round 2000 total: the three counts are kept equal, and
+# 2000 does not divide by 3.  667 rounds up so the set clears 2000.
 #
 # Types are interleaved in rounds rather than run back to back, so the three
 # counts stay level -- stop it at any point and you have a balanced set.
@@ -27,7 +30,7 @@ MPI=/opt/anaconda3/envs/FullProcess/bin/mpirun
 
 TARGET=${TARGET:-500}          # phase 1 goal, per type
 CHUNK=${CHUNK:-50}             # added per type per round
-MAX_PER_TYPE=${MAX_PER_TYPE:-1000}   # hard stop: 1000/type = 3000 total
+MAX_PER_TYPE=${MAX_PER_TYPE:-667}    # hard stop: 667/type = 2001 total
 BLOCK=100000              # index slots reserved per type
 NP_CPU=${NP_CPU:-6}       # ranks for the cpu-bound types
 NP_NET=${NP_NET:-8}       # ranks for real sky: network-latency bound, so more
