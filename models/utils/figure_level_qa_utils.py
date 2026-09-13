@@ -292,7 +292,8 @@ from .general_plot_level_qa_utils import q_errorbars_existance_lines
 
 def figure_level_qa(data, qa_pairs, plot_types, verbose=False):
     ######## FIGURE LEVEL, L1 ########
-    qa_pairs = figure_qa_how_many_panels(data, qa_pairs, verbose=verbose)
+    # here assume single panel only
+    # qa_pairs = figure_qa_how_many_panels(data, qa_pairs, verbose=verbose)
     qa_pairs = figure_qa_plotting_style(data, qa_pairs, verbose=verbose)
     qa_pairs = figure_qa_colormap(data, qa_pairs, verbose=verbose)
     qa_pairs = figure_qa_aspect_ratio(data, qa_pairs, verbose=verbose)
