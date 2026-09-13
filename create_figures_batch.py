@@ -44,6 +44,12 @@ parser.add_argument("-sky_local_only", nargs='?', type=int, default=0,
                     help='1 = never query SkyView; draw real cutouts only from the '
                          '.fits already in -astroquery_img_dir. Runs offline and much '
                          'faster, but only sees objects downloaded before')
+parser.add_argument("-npoints_min", nargs='?', type=int, default=50,
+                    help='grid every panel is drawn on: contour fields, GMM skies '
+                         'and real cutouts all sample nx from this range (ny follows '
+                         'the figure aspect), then quantise onto a shared odd-k '
+                         'ladder so their pixelation matches')
+parser.add_argument("-npoints_max", nargs='?', type=int, default=300)
 parser.add_argument("-colorbar_prob", nargs='?', type=float, default=1.0,
                     help='probability a panel gets its own colorbar. At 1.0 every '
                          'panel in a multipanel figure carries one, and their tick '
@@ -196,6 +202,8 @@ plot_params, panel_params, title_params, xlabel_params, \
     font_names = make_plotplotparams(fullproc_r=resources_dir,
                                      astroquery_img_dir=astroquery_img_dir,
                                      plot_types=plot_types,
+                                     npoints_min=args.npoints_min,
+                                     npoints_max=args.npoints_max,
                                      colorbar_prob=args.colorbar_prob,
                                      panel_min=args.panel_min,
                                      panel_median=args.panel_median,

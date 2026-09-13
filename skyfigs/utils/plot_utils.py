@@ -377,6 +377,46 @@ def get_scatter_plot(plot_params, data, ax, rng=np.random, **kwargs):
 
 
 
+def _square_bin_aspect(ax, data, verbose=False):
+    """
+    Make one data bin draw as a square.
+
+    A bin is box_w/nx wide and box_h/ny tall on screen, so square bins need
+    box_w/nx == box_h/ny.  The axes box is sized by the subplot layout, not by
+    the grid, and the margins taken by labels and a colorbar mean its aspect
+    differs from the figure's -- which is what ny was derived from.  Setting the
+    axes aspect closes that gap:
+
+        set_aspect(a),  a = sy/sx  =>  box_h/box_w = a * yrange/xrange
+        square bins     <=>  box_h/box_w = ny/nx
+        =>  a = (xrange/yrange) * (ny/nx)
+
+    Sky images get this for free -- wcsaxes holds an equal aspect, so their bins
+    already measure 1.00 -- this is the contour equivalent.
+    """
+    try:
+        cols = np.asarray(data['colors'])
+        if cols.ndim != 2:
+            return None
+        ny, nx = cols.shape
+        xs, ys = np.asarray(data['xs']), np.asarray(data['ys'])
+        xrange = float(xs[-1] - xs[0])
+        yrange = float(ys[-1] - ys[0])
+        if not np.isfinite(xrange) or not np.isfinite(yrange) or xrange == 0 or yrange == 0:
+            return None
+        a = abs(xrange / yrange) * (float(ny) / float(nx))
+        if not np.isfinite(a) or a <= 0:
+            return None
+        ax.set_aspect(a, adjustable='box')
+        if verbose:
+            print('  [bins] aspect set to %.4g for square %dx%d bins' % (a, nx, ny))
+        return a
+    except Exception as e:
+        if verbose:
+            print('  [bins] could not set aspect:', str(e))
+        return None
+
+
 def get_contour_plot(plot_params, data, ax, rng=np.random, **kwargs):
     contour = Contour()
     for k,v in kwargs.items():
@@ -394,7 +434,7 @@ def get_contour_plot(plot_params, data, ax, rng=np.random, **kwargs):
     else:
         plot_type = contour.plot_type
     cax = []; side = ''
-    
+
     if plot_type == 'contour':
         if contour.nlevels is None:
             nlevels = int(round(rng.uniform(low=plot_params['nlines']['min'],
@@ -484,6 +524,12 @@ def get_contour_plot(plot_params, data, ax, rng=np.random, **kwargs):
         elif side == 'bottom':
             axis_side = 'bottom'
             cax.xaxis.set_ticks_position(axis_side)
+    # Square bins, to match what the sky images get from wcsaxes.  Applied AFTER
+    # the colorbar: make_axes_locatable places the colorbar against the axes'
+    # position at append time, so shrinking the parent to satisfy an aspect
+    # beforehand leaves the two mismatched and drives up overlap rejections.
+    _square_bin_aspect(ax, data)
+
     plt.draw()
     #print('DRAW WAS CALLED 3')
 
@@ -1107,8 +1153,11 @@ def get_image_of_the_sky_plot(plot_params, data, fig,
             if 'non serializable entry' not in wcs_helix:
                 # grab x/y ranges
                 res_dict = plot_params['distribution']['sky']['resolution']
+                # ONE factor for both axes.  Drawing xres and yres independently
+                # makes the displayed sub-region a different shape from the pixel
+                # grid, which stretches every bin on screen (measured up to 1.3x).
                 xres = rng.uniform(low=res_dict['min'], high=res_dict['max'])
-                yres = rng.uniform(low=res_dict['min'], high=res_dict['max'])
+                yres = xres
                 dx = int(round(data['data params']['sky image params']['original img size'][1]*(1-xres)/2.))
                 dy = int(round(data['data params']['sky image params']['original img size'][0]*(1-yres)/2.))
                 dx = max(0,dx); dy = max(0,dy)
@@ -1125,8 +1174,11 @@ def get_image_of_the_sky_plot(plot_params, data, fig,
             if "'WCS' is not iterable" in str(esky): # assume wcs
                 # grab x/y ranges
                 res_dict = plot_params['distribution']['sky']['resolution']
+                # ONE factor for both axes.  Drawing xres and yres independently
+                # makes the displayed sub-region a different shape from the pixel
+                # grid, which stretches every bin on screen (measured up to 1.3x).
                 xres = rng.uniform(low=res_dict['min'], high=res_dict['max'])
-                yres = rng.uniform(low=res_dict['min'], high=res_dict['max'])
+                yres = xres
                 dx = int(round(data['data params']['sky image params']['original img size'][1]*(1-xres)/2.))
                 dy = int(round(data['data params']['sky image params']['original img size'][0]*(1-yres)/2.))
                 dx = max(0,dx); dy = max(0,dy)

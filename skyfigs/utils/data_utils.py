@@ -2,6 +2,7 @@ import numpy as np
 import json
 from scipy.stats import loguniform
 
+from .distribution_utils import match_pixel_grid
 from .distribution_utils import get_random_data, \
    get_linear_data, get_gmm_data, get_sky_image_data
 
@@ -61,6 +62,12 @@ def get_contour_data(plot_params, distribution = 'random',
     # also add in for figure params?
     if figure_params is not None and contour.ny is None:
         ny = int(round(nx/figure_params['aspect ratio']))
+
+    # Quantise onto the same grid ladder the sky images use, so contour fields
+    # and sky images are pixelated to visually comparable resolutions rather
+    # than being drawn from different distributions.
+    if contour.nx is None and contour.ny is None:
+        nx, ny, _k_grid = match_pixel_grid(nx, ny)
 
     #print('here2')
     
@@ -245,6 +252,16 @@ def get_image_of_the_sky_data(plot_params, distribution = 'random',
     # in case you want to resize for the aspect ratio of the plot
     if figure_params is not None and imgOfSky.ny is None:
         ny = int(round(nx/figure_params['aspect ratio']))
+
+    # Choose the final grid ONCE, here, for both distributions.  A real cutout is
+    # decimated onto it and a GMM sky is generated at it, so the two share one
+    # distribution of nx/ny -- including the odd-k nudge, which would otherwise
+    # apply only to the real images and re-introduce a difference between them.
+    if imgOfSky.nx is None and imgOfSky.ny is None:
+        src = plot_params.get('distribution', {}).get('sky', {})
+        nx, ny, _k_grid = match_pixel_grid(nx, ny,
+                                           src.get('image width'),
+                                           src.get('image height'))
 
     if imgOfSky.distribution is not None:
         distribution = imgOfSky.distribution
@@ -714,10 +731,16 @@ def get_data(plot_params, plot_type='line', distribution='random', #npoints = 10
             data['data params'] = data_params
         return data
     elif plot_type == 'contour':
+        # figure_params must be forwarded here: without it get_contour_data's
+        # "ny = nx / aspect ratio" line never fires and ny stays an INDEPENDENT
+        # uniform sample, so contour grids ignore the figure's aspect entirely
+        # (observed 214x51 on a 1.06-aspect figure).  The sky branch below has
+        # always passed it, which is why only contour was affected.
         xs, ys, color_grid,xerr,yerr, data_params = get_contour_data(plot_params,
                                                        distribution=distribution, 
                                                        rng=rng,
                                                            verbose=verbose, 
+                                                           figure_params=figure_params,
                                                            **kwargs)
         data = {'xs':xs, 'ys': ys, 'colors':color_grid}
         if len(xerr) > 0:

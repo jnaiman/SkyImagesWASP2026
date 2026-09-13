@@ -36,7 +36,7 @@ def make_plotplotparams(fullproc_r=None,
                         plot_types=PLOT_TYPES,
                         missing_list_file=None,
                         panel_min=1, panel_median=4, panel_max=25,
-                        sky_npoints_min=50, sky_npoints_max=300,
+                        npoints_min=50, npoints_max=300,
                         equation_prob=0.25, colorbar_prob=1.0,
                         contour_prob=1.0, sky_prob=1.0,
                         sky_from_astroquery_prob=1.0, sky_from_gmm_prob=1.0,
@@ -55,10 +55,12 @@ def make_plotplotparams(fullproc_r=None,
                        : panels per figure.  npanels ~ normal(median, std) is
                          clamped to [min, max], so panel_min=2 forces every
                          figure to be multipanel and panel_max=1 forces single.
-    sky_npoints_min / sky_npoints_max
-                       : grid the sky image is drawn on, shared by both the real
-                         and the GMM path so their resolutions are drawn from
-                         one distribution.
+    npoints_min / npoints_max
+                       : grid every panel is drawn on -- contour fields, GMM
+                         skies and real cutouts alike.  One range for all three
+                         so their pixelation is drawn from one distribution;
+                         data_utils then quantises onto the shared odd-k ladder
+                         (see distribution_utils.match_pixel_grid).
     contour_prob / sky_prob
                        : relative weight of each plot type (normalised below).
                          Set one to 0 to generate only the other.
@@ -112,9 +114,12 @@ def make_plotplotparams(fullproc_r=None,
         plot_params_line['contour']['nlines']['min'] = 1
         plot_params_line['contour']['nlines']['max'] = 5
 
-        # lower resolution?
-        plot_params_line['contour']['npoints'] = {'nx': {'min': 10, 'max': 100},
-                                                  'ny': {'min': 10, 'max': 100}}
+        # Same grid range as the sky images, so a contour field and a sky image
+        # are pixelated comparably.  data_utils quantises this onto the shared
+        # odd-k ladder, exactly as it does for sky images.
+        plot_params_line['contour']['npoints'] = {
+            'nx': {'min': npoints_min, 'max': npoints_max},
+            'ny': {'min': npoints_min, 'max': npoints_max}}
 
         # prob of getting a contour plot
         plot_params_line['contour']['prob'] = contour_prob
@@ -152,8 +157,8 @@ def make_plotplotparams(fullproc_r=None,
         # same aspect and resampled onto it.  Keeping one range for both is what
         # stops "300x300 and square" from identifying the real ones.
         plot_params_line['image of the sky']['npoints'] = {
-            'nx': {'min': sky_npoints_min, 'max': sky_npoints_max},
-            'ny': {'min': sky_npoints_min, 'max': sky_npoints_max}}
+            'nx': {'min': npoints_min, 'max': npoints_max},
+            'ny': {'min': npoints_min, 'max': npoints_max}}
 
         # prob of getting an image of the sky
         plot_params_line['image of the sky']['prob'] = sky_prob

@@ -1178,6 +1178,64 @@ def pick_local_sky_image(query_imgs_dir, rng=np.random, verbose=False):
     return filename, {'object': obj_name, 'pdf': pdf, 'wavelength': ''}, [survey]
 
 
+# Nominal source grid a real SkyView cutout arrives on.  GMM skies and contour
+# fields have no source image, but they are quantised against the same nominal
+# size so that all three end up with the SAME distribution of nx/ny -- otherwise
+# "which grid sizes occur" would itself identify the real images.
+NOMINAL_SOURCE_SIZE = (300, 300)
+
+
+def match_pixel_grid(nx, ny, src_w=None, src_h=None):
+    """
+    Choose the grid a panel is actually drawn on, given the requested (nx, ny).
+
+    A real cutout is put onto its grid by integer decimation of the source: take
+    every k-th pixel, offset (k-1)/2 into each block.  That offset is a whole
+    pixel only when k is ODD, and only then does the sampled grid sit exactly on
+    the centre of the crop.  So k is forced odd here, stepping up to k+1 and
+    shrinking nx/ny by k/(k+1) -- which leaves the crop, and therefore the field
+    of view, essentially unchanged while moving nx/ny slightly off the request.
+
+    Applied to every plot type, not just real sky images, so that contour fields
+    and GMM skies are pixelated on the same ladder of grid sizes.
+
+    Returns (nx, ny, k).  Idempotent: feeding its own output back gives the same
+    answer, because the k+1 step is only taken when the requested grid is what
+    made k even.
+    """
+    W = int(src_w or NOMINAL_SOURCE_SIZE[0])
+    H = int(src_h or NOMINAL_SOURCE_SIZE[1])
+    # Clamp to the source JOINTLY, never per-axis: clipping ny alone (a tall
+    # figure can ask for ny = nx/0.25) would change the grid's aspect and so
+    # stretch every bin on screen.  Scaling both by the same factor keeps bins
+    # square and just makes the grid coarser.
+    nx = max(1, int(nx)); ny = max(1, int(ny))
+    if nx > W or ny > H:
+        scale = min(W / float(nx), H / float(ny))
+        nx = max(1, int(round(nx * scale)))
+        ny = max(1, int(round(ny * scale)))
+    nx = int(np.clip(nx, 1, W))
+    ny = int(np.clip(ny, 1, H))
+
+    # Shrinking nx/ny can itself make a larger k fit, and that larger k may be
+    # even again, so this has to settle rather than adjust once.  nx/ny strictly
+    # decrease each round, so it terminates; the cap is belt and braces.
+    k = max(1, min(W // nx, H // ny))
+    for _ in range(8):
+        if k % 2 == 1:
+            break
+        k_odd = k + 1
+        nx_odd = max(1, (nx * k) // k_odd)
+        ny_odd = max(1, (ny * k) // k_odd)
+        if nx_odd * k_odd > W or ny_odd * k_odd > H or (nx_odd == nx and ny_odd == ny):
+            k = max(1, k - 1)      # cannot step up; drop to the odd k below
+            break
+        nx, ny, k = nx_odd, ny_odd, max(1, min(W // nx_odd, H // ny_odd))
+    if k % 2 == 0:
+        k = max(1, k - 1)
+    return nx, ny, k
+
+
 def crop_and_resample_sky(img_data, wcs, nx, ny, verbose=False):
     """
     Put a real SkyView cutout onto (about) the (nx, ny) grid sampled for this
@@ -1217,23 +1275,16 @@ def crop_and_resample_sky(img_data, wcs, nx, ny, verbose=False):
         nx = int(np.clip(nx_req, 1, W))
         ny = int(np.clip(ny_req, 1, H))
 
-        # largest integer decimation that still fits -> largest field of view
+        # nx/ny were already chosen by match_pixel_grid against the nominal
+        # source size, so k normally lands odd here with the full field of view.
+        # If the actual file is not that size, step k DOWN to the nearest odd
+        # value rather than altering nx/ny -- keeping the grid the caller picked
+        # (and shared with the GMM/contour paths) at the cost of a little field
+        # of view.  k must stay odd or the sampled grid sits half a source pixel
+        # off the crop centre.
         k = max(1, min(W // nx, H // ny))
-
-        # Prefer an ODD k.  The sample offset within each block is (k-1)/2, which
-        # is only a whole pixel when k is odd; with even k the sampled grid sits
-        # half a source pixel off the crop centre.  Stepping up to k+1 and
-        # shrinking nx/ny by k/(k+1) keeps the crop -- and so the field of view --
-        # essentially unchanged and the aspect ratio intact, at the cost of a
-        # slightly coarser grid than asked for.  This is the "truer to the
-        # original image" trade: exact centring and exact pixel provenance, with
-        # nx/ny landing near rather than on the requested values.
         if k % 2 == 0:
-            k_odd = k + 1
-            nx_odd = max(1, (nx * k) // k_odd)
-            ny_odd = max(1, (ny * k) // k_odd)
-            if nx_odd * k_odd <= W and ny_odd * k_odd <= H:
-                k, nx, ny = k_odd, nx_odd, ny_odd
+            k = max(1, k - 1)
 
         Wc, Hc = nx * k, ny * k
         x0, y0 = (W - Wc) // 2, (H - Hc) // 2
