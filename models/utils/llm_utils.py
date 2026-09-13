@@ -4,6 +4,7 @@ import base64
 import json
 import os
 import re
+from io import BytesIO
 
 # parsing
 def parse_qa(level_parse, plot_level, qa, j, types, 
@@ -111,17 +112,26 @@ def load_image(image_path, tmp_dir = '~/Downloads/tmp/', fac=1.0,
             n0 = max_img_size[1]-1
             aspect = int(round(img.size[0]*float(n0)/img.size[1]))
             img = img.resize((aspect,n0), Image.Resampling.LANCZOS)            
-    #img = np.array(img)
-    #with open(image_path, "rb") as image_file:
-    img.save(tmp_dir + 'tmp_img.'+img_format)
+    # Encode in memory rather than via a scratch file.
+    #
+    # This used to save to tmp_dir + 'tmp_img.<fmt>' and immediately read it back.
+    # That filename is FIXED, so two notebooks sharing a tmp_dir (the chatgpt,
+    # claude and gemini runners all default to ~/Downloads/tmp/) would overwrite
+    # each other's scratch image between the save and the read -- and each would
+    # then encode whichever figure the other had just written, silently sending
+    # the wrong image with the right question.  A partially written JPEG could
+    # also be read mid-save.  Going through BytesIO removes the shared state, so
+    # the runners are safe to run concurrently; it is also faster.
+    #
+    # `tmp_dir` is kept in the signature: callers still pass it, and it costs
+    # nothing to accept and ignore.
+    buf = BytesIO()
+    img.save(buf, format=img_format.upper())     # 'png'/'jpeg'/'gif' -> PIL names
+    encoded = base64.b64encode(buf.getvalue()).decode("utf-8")
     if not return_image_format:
-        with open(tmp_dir +'tmp_img.'+img_format,'rb') as image_file:
-            #return base64.b64encode(img).decode("utf-8")
-            return base64.b64encode(image_file.read()).decode("utf-8")
+        return encoded
     else:
-         with open(tmp_dir +'tmp_img.'+img_format,'rb') as image_file:
-            #return base64.b64encode(img).decode("utf-8")
-            return base64.b64encode(image_file.read()).decode("utf-8"), img_format  
+        return encoded, img_format
 
 
 def get_img_json_pair(img_path, json_path, dir_api, 

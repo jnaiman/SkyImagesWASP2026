@@ -18,7 +18,21 @@ class NumpyEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
+        elif hasattr(obj, 'cards') and hasattr(obj, 'tostring'):
+            # astropy.io.fits.Header -- it has a perfectly good text form, and
+            # falling through to the catch-all below was silently replacing the
+            # whole FITS header with the string 'non serializable entry'.
+            # Duck-typed so this module keeps its numpy/stdlib-only imports.
+            try:
+                return obj.tostring(sep='\n', endcard=False, padding=False)
+            except Exception:
+                return 'non serializable entry'
         else:
+            # NOTE: load-bearing.  data params['WCS'] holds an astropy WCS object
+            # that is deliberately not serialised -- the header string beside it
+            # carries the same information -- and both plot_utils and
+            # synthetic_fig_utils test for exactly this sentinel.  Do not turn
+            # this into str(obj).
             return 'non serializable entry'
         return json.JSONEncoder.default(self, obj)
 

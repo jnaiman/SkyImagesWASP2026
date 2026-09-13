@@ -1559,8 +1559,30 @@ def get_sky_image_data(plot_params,
     data_params['WCS header string'] = wcs.to_header_string()
     # WCS of the downloaded .fits, before cropping/resampling
     data_params['WCS header string (fetched)'] = wcs_fetched_header
+    # Physical units of the pixel values, pulled out of the FITS header so they
+    # survive into the JSON as plain fields rather than having to be dug back out
+    # of the header text.  Only some SkyView surveys declare them: the radio /
+    # IR / microwave ones generally do (Jy/beam, MJy/sr, K, Rayleighs), while the
+    # optical ones (DSS, Mellinger, TESS, 2MASS, WISE) carry uncalibrated
+    # instrumental values and set no BUNIT at all -- hence None, not a guess.
+    _hdr_units = {}
+    for _k in ('BUNIT', 'BTYPE', 'TELESCOP', 'INSTRUME', 'SURVEY'):
+        try:
+            _v = hdu.header.get(_k)
+        except Exception:
+            _v = None
+        if isinstance(_v, str):
+            _v = _v.strip() or None
+        _hdr_units[_k.lower()] = _v
+
     data_params['sky image params'] = {'filename':filename, 
                                        'header':hdu.header,
+                                       # units of the pixel values; see above
+                                       'bunit':_hdr_units['bunit'],
+                                       'btype':_hdr_units['btype'],
+                                       'telescope':_hdr_units['telescop'],
+                                       'instrument':_hdr_units['instrume'],
+                                       'survey header':_hdr_units['survey'],
                                        'object':obj['object'], 
                                        'pdf':obj['pdf'],
                                        'survey':survey, 

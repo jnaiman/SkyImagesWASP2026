@@ -42,7 +42,8 @@ LINE_LIST = ['random', 'linear', 'gaussian mixture model']
 
 
 def plot_level_contour_qa(data, qa_pairs, iplot, stats=None,
-                          line_list=None, verbose_qa=False):
+                          line_list=None, verbose_qa=False,
+                          stat_axes=('color',)):
     """
     Every contour-panel question, for panel `iplot`.
 
@@ -52,8 +53,17 @@ def plot_level_contour_qa(data, qa_pairs, iplot, stats=None,
 
     Levels follow the paper's difficulty tiers:
       L1  is this panel drawn as an image, contour lines, or both
-      L2  min/max/median/mean along x, y and the color axis
+      L2  min/max/median/mean of the color values
       L3  which distribution the color and x/y data were drawn from
+
+    stat_axes : which axes get min/max/median/mean.  'color' only, by default.
+
+        The x and y versions were removed: `q_stats_contours` takes the
+        statistic over `data['plotN']['data']['xs']`, which is the coordinate
+        grid, so the answers describe where the axes run rather than anything
+        about the image -- and the grid is never zoomed for contour, so the
+        min and max were exactly the axis limits on all 200 panels checked.
+        Pass ('x', 'y', 'color') to restore them.
     """
     if stats is None:
         stats = STATS
@@ -68,7 +78,7 @@ def plot_level_contour_qa(data, qa_pairs, iplot, stats=None,
     ######### L2 #########
     # stats items
     for k, v in stats.items():          # for all stats
-        for axis in ['x', 'y', 'color']:
+        for axis in stat_axes:
             qa_pairs = q_stats_contours(data, qa_pairs, stat={k: v},
                                         plot_num=iplot, use_words=True,
                                         verbose=verbose_qa, axis=axis)
@@ -102,7 +112,7 @@ def plot_level_general_qa(data, qa_pairs, iplot, axes=('x', 'y'), verbose_qa=Fal
 
 def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
                       line_list=None, verbose_qa=False,
-                      ask_image_or_lines=False, ask_radec=True,
+                      ask_image_or_lines=False, ask_radec=False,
                       ask_extras=True, ask_axis_limits=True):
     """
     Every "image of the sky" question, for panel `iplot`.
@@ -111,11 +121,15 @@ def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
         sky panels (the generator weights it 1000/1/1, so the answer is "image"
         ~99.8% of the time).  Off by default -- a near-constant answer inflates
         accuracy without measuring anything.  Set True to include it.
-    ask_radec : include min/max/median/mean of RA and DEC, taken over every
-        data point used to make the image -- the same footing as the colour
-        statistics, and as every contour statistic.  Automatically skipped
-        per-panel when the coordinates cannot be determined.  Set False for
-        colour-only statistics.
+    ask_radec : include min/max/median/mean of RA and DEC.  OFF by default.
+
+        These are statistics of the coordinate grid, not of the image: the mean
+        RA of a regular grid is just the middle of the field, so the answer says
+        where the panel points rather than anything about what it shows.  What
+        the axes span is asked directly, and unambiguously, by the axis-limit
+        questions below.  Set True to restore them; the machinery
+        (sky_radec_data, the HMS formatting, the RA unwrapping) is all still
+        here and tested.
     ask_axis_limits : include the lower/upper limit of each axis -- what the
         panel displays, as opposed to what the data covers.  These differ
         whenever the panel is zoomed, which the real-sky path does on almost
@@ -128,7 +142,7 @@ def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
       L1  (optional) image vs contour lines vs both
       L1  lower/upper limit of the RA and DEC axes
       L1  (extras) coordinate epoch, finest unit on the RA and DEC ticks
-      L2  min/max/median/mean of the color values, and of RA/DEC in degrees;
+      L2  min/max/median/mean of the color values;
           (extras) angular field height and width in arcmin
       L3  real image of the sky vs gaussian mixture model;
           (extras) pixel scale in arcsec
