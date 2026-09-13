@@ -14,6 +14,9 @@ generates:
     of the whole figure: panel count, plotting style, colormap, aspect ratio,
     titles, axis labels, tick labels, which plot types appear.
   * `plot_level_contour_qa` (below) -- questions asked of a contour panel.
+  * `plot_level_sky_qa` (below) -- questions asked of an "image of the sky"
+    panel.  Adapted from the contour set rather than copied: see
+    sky_plot_qa_utils.py for what differs and why.
 
 The histogram / scatter / line dispatchers, and the cross-panel one, are
 deliberately absent -- see README.md in this directory.
@@ -23,6 +26,8 @@ import numpy as np
 
 from .contour_plot_qa_utils import (q_stats_contours, q_relationship_contour,
                                     q_contour_plot_image_or_lines)
+from .sky_plot_qa_utils import (q_stats_sky, q_relationship_sky,
+                                q_sky_image_or_lines, SKY_LINE_LIST)
 from .general_plot_level_qa_utils import q_errorbars_existance_lines
 
 
@@ -89,4 +94,50 @@ def plot_level_general_qa(data, qa_pairs, iplot, axes=('x', 'y'), verbose_qa=Fal
         qa_pairs = q_errorbars_existance_lines(data, qa_pairs, axis=axis,
                                                plot_num=iplot,
                                                verbose=verbose_qa)
+    return qa_pairs
+
+
+def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
+                      line_list=None, verbose_qa=False,
+                      ask_image_or_lines=False, ask_radec=True):
+    """
+    Every "image of the sky" question, for panel `iplot`.
+
+    ask_image_or_lines : the image/contour/both question is near-degenerate for
+        sky panels (the generator weights it 1000/1/1, so the answer is "image"
+        ~99.8% of the time).  Off by default -- a near-constant answer inflates
+        accuracy without measuring anything.  Set True to include it.
+    ask_radec : include min/max/median/mean of RA and DEC, derived from the
+        panel's WCS over the displayed region.  Automatically skipped per-panel
+        when no WCS is stored.  Set False for color-only statistics.
+
+    Levels:
+      L1  (optional) image vs contour lines vs both
+      L2  min/max/median/mean of the color values, and of RA/DEC in degrees
+      L3  real image of the sky vs gaussian mixture model
+    """
+    if stats is None:
+        stats = STATS
+    if line_list is None:
+        line_list = SKY_LINE_LIST
+
+    ######### L1 #########
+    if ask_image_or_lines:
+        qa_pairs = q_sky_image_or_lines(data, qa_pairs,
+                                        plot_num=iplot,
+                                        verbose=verbose_qa)
+
+    ######### L2 #########
+    axes = ['color'] + (['x', 'y'] if ask_radec else [])
+    for k, v in stats.items():
+        for axis in axes:
+            qa_pairs = q_stats_sky(data, qa_pairs, stat={k: v},
+                                   plot_num=iplot, use_words=True,
+                                   verbose=verbose_qa, axis=axis)
+
+    ######### L3 #########
+    qa_pairs = q_relationship_sky(data, qa_pairs, plot_num=iplot,
+                                  return_qa=True, use_words=True,
+                                  use_list=True, line_list=line_list,
+                                  verbose=verbose_qa)
     return qa_pairs

@@ -1,0 +1,345 @@
+"""
+QA pairs for "image of the sky" panels.
+
+Adapted from `contour_plot_qa_utils.py`.  A sky panel carries the same shape of
+data as a contour panel -- xs, ys and a 2-D color grid -- but three of the
+contour questions do not transfer unchanged, so this is an adaptation rather
+than a rename:
+
+1. **x/y statistics.**  For a sky panel `xs`/`ys` are PIXEL INDICES (0..nx-1,
+   0..ny-1) while the axes on the figure are labelled in RA/DEC.  Copying
+   `q_stats_contours(axis='x')` would produce ground truth "0" for a figure
+   showing "2h27m24s" -- unanswerable from the image.  `q_stats_sky` therefore
+   asks in RA/DEC degrees, which is what the axes actually show.  Where those
+   degrees come from depends on the distribution: a GMM sky already stores
+   xs/ys in degrees, while a real cutout stores pixel indices and needs its WCS
+   applied over the displayed sub-region.  Both are handled, deliberately -- if
+   only real-sky panels got RA/DEC questions, the presence of the question would
+   leak the answer to point 2 below.
+
+2. **Distribution choices.**  Contour offers [random, linear, gaussian mixture
+   model].  A sky panel is either a real SkyView cutout or a synthetic
+   gaussian-mixture sky, so `q_relationship_sky` offers
+   [gaussian mixture model, real image of the sky], and asks once about the
+   image rather than once per axis -- the provenance is a property of the whole
+   image, not of an axis.
+
+3. **Image-vs-lines.**  Kept as `q_sky_image_or_lines`, but OFF by default in
+   the dispatcher: the generator sets the image/contour/both weights to
+   1000/1/1, so the answer is "image" about 99.8% of the time.  A question whose
+   answer is near-constant inflates accuracy without measuring anything.  Turn it
+   on with `ask_image_or_lines=True` if you want it.
+
+The color-axis statistics transfer unchanged -- the colorbar is drawn on the
+figure, so min/max/median/mean of the color data are legitimately readable.
+"""
+
+import numpy as np
+
+from .plot_qa_utils import (get_nplots, persona, context_single_multi,
+                            how_much_data_values, get_format_adder,
+                            what_is_relationship)
+
+
+# what the stored `distribution` value means in words
+SKY_DISTRIBUTIONS = {
+    'sky': 'real image of the sky',
+    'gmm': 'gaussian mixture model',
+}
+# the choices offered to the model
+SKY_LINE_LIST = ['gaussian mixture model', 'real image of the sky']
+
+
+def _displayed_pixel_limits(pdata, nx, ny):
+    """
+    The pixel range actually drawn, which is not always the whole array -- the
+    sky path randomly zooms into 50-100% of the image.  Falls back to the full
+    array when no limits were recorded.
+    """
+    dfp = pdata.get('data from plot') or {}
+    xl = dfp.get('x pixel limits')
+    yl = dfp.get('y pixel limits')
+    if xl is None or yl is None:
+        return (0, nx - 1), (0, ny - 1)
+    return (float(xl[0]), float(xl[1])), (float(yl[0]), float(yl[1]))
+
+
+def sky_radec_ranges(data, plot_num=0, verbose=False):
+    """
+    (ra_min, ra_max), (dec_min, dec_max) in DEGREES for the region displayed in
+    this panel, or (None, None) if it can't be determined.
+
+    The two sky distributions store their coordinates differently, so this has
+    to branch:
+
+      * GMM sky   -- xs/ys are ALREADY RA/DEC in degrees (the generator samples
+                     the cluster centres in RA/DEC), and no WCS is written into
+                     `data params`.  Read them straight off.
+      * real sky  -- xs/ys are PIXEL INDICES into the cutout; the RA/DEC printed
+                     on the axes comes from the stored WCS, applied over the
+                     displayed sub-region.
+
+    Getting this wrong matters beyond correctness: if RA/DEC questions were
+    asked only of real-sky panels, the *presence* of the question would leak the
+    answer to the Level 3 real-vs-synthetic question.
+
+    astropy is imported lazily (real-sky branch only) so the rest of this
+    package keeps its numpy/PIL/stdlib-only dependency footprint.
+    """
+    pdata = data['plot' + str(plot_num)]
+    dparams = (pdata.get('data') or {}).get('data params') or {}
+    hdr = dparams.get('WCS header string')
+
+    # ---- GMM sky: xs/ys are already degrees ----
+    if not hdr:
+        if pdata.get('distribution') != 'gmm':
+            if verbose:
+                print('[sky qa] no WCS and not a gmm sky -- skipping RA/DEC questions')
+            return None, None
+        try:
+            xs = np.asarray(pdata['data']['xs'], dtype=float)
+            ys = np.asarray(pdata['data']['ys'], dtype=float)
+            if xs.size == 0 or ys.size == 0:
+                return None, None
+            ra = (float(xs.min()), float(xs.max()))
+            dec = (float(ys.min()), float(ys.max()))
+            if ra[1] - ra[0] > 180.0:
+                if verbose:
+                    print('[sky qa] gmm panel straddles the RA=0 wrap -- skipping')
+                return None, None
+            return ra, dec
+        except Exception as e:
+            if verbose:
+                print('[sky qa] could not read gmm RA/DEC:', e)
+            return None, None
+
+    # ---- real sky: pixel indices + WCS ----
+    try:
+        from astropy.wcs import WCS
+    except ImportError:
+        if verbose:
+            print('[sky qa] astropy not available -- skipping RA/DEC questions')
+        return None, None
+
+    colors = np.asarray(pdata['data']['colors'])
+    if colors.ndim != 2:
+        return None, None
+    ny, nx = colors.shape
+
+    try:
+        w = WCS(hdr)
+        (x0, x1), (y0, y1) = _displayed_pixel_limits(pdata, nx, ny)
+        # sample the four corners of the displayed box; RA/DEC are not separable
+        # in general (the projection rotates), so take the extremes over corners
+        xs = np.array([x0, x1, x0, x1], dtype=float)
+        ys = np.array([y0, y0, y1, y1], dtype=float)
+        ra, dec = w.pixel_to_world_values(xs, ys)
+        ra = np.asarray(ra, dtype=float)
+        dec = np.asarray(dec, dtype=float)
+        if not (np.all(np.isfinite(ra)) and np.all(np.isfinite(dec))):
+            return None, None
+        # RA wraps at 360; if the box straddles the wrap the min/max are
+        # meaningless, so bail rather than emit a wrong answer
+        if ra.max() - ra.min() > 180.0:
+            if verbose:
+                print('[sky qa] panel straddles the RA=0 wrap -- skipping')
+            return None, None
+        return (float(ra.min()), float(ra.max())), (float(dec.min()), float(dec.max()))
+    except Exception as e:
+        if verbose:
+            print('[sky qa] could not derive RA/DEC:', e)
+        return None, None
+
+
+def _store(qa_pairs, level, key, plot_num, payload):
+    """Insert one Q/A under qa_pairs[level]['Plot-level questions'][key]."""
+    bucket = qa_pairs[level]['Plot-level questions']
+    if key not in bucket:
+        bucket[key] = {}
+    bucket[key]['plot' + str(plot_num)] = payload
+    return qa_pairs
+
+
+####### L1 #######
+def q_sky_image_or_lines(data, qa_pairs, plot_num=0,
+                         return_qa=True, verbose=True, use_words=True, use_list=True,
+                         single_figure_flag=True,
+                         text_persona=None, level='Level 1'):
+    """
+    Is the sky panel drawn as an image, contour lines, or both?
+
+    NOTE: near-degenerate.  The generator weights image/contour/both as
+    1000/1/1, so this is "image" ~99.8% of the time.  Off by default in the
+    dispatcher -- see the module docstring.
+    """
+    big_tag = 'image or lines'
+    object = 'image of the sky'
+
+    itag = ''
+    for d, v in data['plot' + str(plot_num)]['data from plot']['data'].items():
+        itag += d
+    if 'image' in itag and 'contour' in itag:
+        ans = 'both'
+    elif 'image' in itag:
+        ans = 'image'
+    elif 'contour' in itag:
+        ans = 'contour lines'
+    else:
+        if verbose:
+            print('[sky qa] unknown sky panel style:', itag, '-- skipping')
+        return qa_pairs
+
+    nplots = get_nplots(data)
+    text_persona = persona(text=text_persona)
+    text_context = context_single_multi(data, nplots, plot_num, use_words, single_figure_flag)
+
+    adder, text_format = get_format_adder(object, big_tag,
+                                          val_type='a string',
+                                          nplots=nplots,
+                                          use_words=use_words,
+                                          use_list=use_list)
+    text_question = 'What is the style of the ' + object + '?'
+    if use_list:
+        text_question += ' Please choose the style from the following list: [image, contour lines, both].'
+
+    q = text_persona + " " + text_context + " " + text_question + " " + text_format
+    a = {big_tag + adder: ans}
+    if verbose:
+        print('QUESTION:', q)
+        print('ANSWER:', a)
+    if return_qa:
+        return _store(qa_pairs, level, big_tag + adder, plot_num,
+                      {'Q': q, 'A': a, 'persona': text_persona,
+                       'context': text_context, 'question': text_question,
+                       'format': text_format})
+
+
+####### L2 #######
+def q_stats_sky(data, qa_pairs, stat={'minimum': np.min}, axis='color',
+                plot_num=0, return_qa=True, use_words=True, verbose=True,
+                single_figure_flag=True, text_persona=None):
+    """
+    min/max/median/mean for a sky panel.
+
+    axis='color'  -> statistic of the pixel values, as read off the colorbar.
+                     Transfers unchanged from the contour version.
+    axis='x'/'y'  -> statistic of RA / DEC in DEGREES over the displayed region,
+                     derived from the panel's WCS.  NOT the raw xs/ys, which are
+                     pixel indices and do not correspond to anything printed on
+                     the figure.  Skipped when the WCS is unavailable.
+    """
+    val_type = 'a float'
+    axis = axis.lower()
+    if axis not in ('x', 'y', 'color'):
+        print('Axis not chosen correctly:', axis)
+        return qa_pairs
+
+    f = list(stat.values())[0]
+    big_tag = list(stat.keys())[0]
+    pdata = data['plot' + str(plot_num)]
+
+    if axis == 'color':
+        zs = pdata['data']['colors']
+        list_stat = float(f(np.asarray(zs)))
+        axis_name = 'color'
+        units = ''
+    else:
+        ra_rng, dec_rng = sky_radec_ranges(data, plot_num=plot_num, verbose=verbose)
+        if ra_rng is None:
+            return qa_pairs                      # no WCS -> do not ask
+        rng = ra_rng if axis == 'x' else dec_rng
+        # min/max are the box edges; median/mean are its centre, since the grid
+        # is regular in pixel space and (to a good approximation) in world space
+        # across a single cutout
+        if f is np.min:
+            list_stat = float(rng[0])
+        elif f is np.max:
+            list_stat = float(rng[1])
+        else:
+            list_stat = float(0.5 * (rng[0] + rng[1]))
+        axis_name = 'right ascension' if axis == 'x' else 'declination'
+        units = ' in degrees'
+
+    nplots = get_nplots(data)
+    text_persona = persona(text=text_persona)
+    text_context = context_single_multi(data, nplots, plot_num, use_words, single_figure_flag)
+
+    text_question, adder, text_format = how_much_data_values(big_tag, nplots=nplots,
+                                                             axis=axis_name,
+                                                             val_type=val_type,
+                                                             use_words=use_words,
+                                                             along_an_axis=True,
+                                                             for_each='')
+    if units:
+        text_question = text_question.rstrip() + ' Give the value' + units + '.'
+        text_format = text_format.rstrip('.') + ', expressed' + units + '.'
+
+    big_tag += ' ' + axis_name
+    la = {big_tag: list_stat}
+    a = {big_tag + adder: la}
+    q = text_persona + " " + text_context + " " + text_question + " " + text_format
+
+    if verbose:
+        print('QUESTION:', q)
+        print('ANSWER:', a)
+    if return_qa:
+        return _store(qa_pairs, 'Level 2', big_tag + adder, plot_num,
+                      {'Q': q, 'A': a, 'persona': text_persona,
+                       'context': text_context, 'question': text_question,
+                       'format': text_format})
+
+
+####### L3 #######
+def q_relationship_sky(data, qa_pairs, plot_num=0,
+                       return_qa=True, use_words=True, use_list=True,
+                       line_list=None, single_figure_flag=True,
+                       verbose=True, text_persona=None):
+    """
+    Is this a real image of the sky, or a synthetic (gaussian mixture) one?
+
+    Differs from the contour version in two ways:
+      * the choices are [gaussian mixture model, real image of the sky] rather
+        than the contour list, and
+      * it is asked ONCE about the image rather than once per axis -- provenance
+        is a property of the whole image, not of the x/y or color axis.
+    """
+    if line_list is None:
+        line_list = SKY_LINE_LIST
+
+    big_tag = 'distribution'
+    val_type = 'a string'
+
+    dist = data['plot' + str(plot_num)]['distribution']
+    la = SKY_DISTRIBUTIONS.get(dist, dist)
+    if la not in line_list and verbose:
+        print('[sky qa] WARNING: answer %r is not among the offered choices %s'
+              % (la, line_list))
+
+    nplots = get_nplots(data)
+    # ask about the image as a whole -- along_an_axis=False, so no axis wording
+    text_question, adder, text_format = what_is_relationship(big_tag, nplots=nplots,
+                                                             val_type=val_type,
+                                                             use_words=use_words,
+                                                             along_an_axis=False,
+                                                             for_each='')
+
+    text_persona = persona(text=text_persona)
+    text_context = context_single_multi(data, nplots, plot_num, use_words, single_figure_flag)
+
+    if use_list:
+        adder = adder.split(')')[0] + ' + list)'
+        text_context += (' Please choose the ' + big_tag +
+                         ' from the following list: [' + ', '.join(line_list) + '].')
+
+    q = text_persona + " " + text_context + " " + text_question + " " + text_format
+    a = {big_tag + adder: la}
+
+    if verbose:
+        print('QUESTION:', q)
+        print('ANSWER:', a)
+    if return_qa:
+        return _store(qa_pairs, 'Level 3', big_tag + '-image' + adder, plot_num,
+                      {'Q': q, 'A': a,
+                       'note': 'sky panels are either a real SkyView cutout or a synthetic gaussian-mixture sky',
+                       'persona': text_persona, 'context': text_context,
+                       'question': text_question, 'format': text_format})
