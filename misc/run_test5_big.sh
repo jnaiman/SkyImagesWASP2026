@@ -3,7 +3,7 @@
 #
 #   Phase 1: reach TARGET (default 500) figures of each of the three kinds.
 #   Phase 2: keep going, adding CHUNK (default 50) more of each kind per round,
-#            until stopped.
+#            until MAX_PER_TYPE (default 1000, i.e. 3000 total) is reached.
 #
 # Types are interleaved in rounds rather than run back to back, so the three
 # counts stay level -- stop it at any point and you have a balanced set.
@@ -21,12 +21,13 @@
 set -u
 
 cd /Users/jnaiman/SkyImagesWASP2026
-OUT=${OUT:-/Users/jnaiman/Dropbox/WASP2026/tests/test5_big}
+OUT=${OUT:-$HOME/Downloads/tmp/test5_big}
 PY=/opt/anaconda3/envs/FullProcess/bin/python
 MPI=/opt/anaconda3/envs/FullProcess/bin/mpirun
 
-TARGET=${TARGET:-500}     # phase 1 goal, per type
-CHUNK=${CHUNK:-50}        # added per type per round
+TARGET=${TARGET:-500}          # phase 1 goal, per type
+CHUNK=${CHUNK:-50}             # added per type per round
+MAX_PER_TYPE=${MAX_PER_TYPE:-1000}   # hard stop: 1000/type = 3000 total
 BLOCK=100000              # index slots reserved per type
 NP_CPU=${NP_CPU:-6}       # ranks for the cpu-bound types
 NP_NET=${NP_NET:-8}       # ranks for real sky: network-latency bound, so more
@@ -89,7 +90,12 @@ while true; do
 
   # everyone reached the target -> phase 2, ask for CHUNK more of each
   if [ "$c" -ge "$TARGET" ] && [ "$g" -ge "$TARGET" ] && [ "$r" -ge "$TARGET" ]; then
+    if [ "$TARGET" -ge "$MAX_PER_TYPE" ]; then
+      say "=== ALL DONE: ${c}+${g}+${r} = $((c+g+r)) figures (${MAX_PER_TYPE}/type) ==="
+      exit 0
+    fi
     TARGET=$(( TARGET + CHUNK ))
+    [ "$TARGET" -gt "$MAX_PER_TYPE" ] && TARGET=$MAX_PER_TYPE
     say "*** all types reached target; continuing to ${TARGET}/type ***"
   fi
 done
