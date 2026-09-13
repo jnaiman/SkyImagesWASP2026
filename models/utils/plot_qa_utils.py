@@ -113,6 +113,23 @@ def context(nrow, ncol, plot_index = [0,0],
     return q
 
 
+def panel_phrase(nplots, lead='in'):
+    """
+    How a plot-level question refers to what it is asking about.
+
+    `context_single_multi` already drops the "which panel" pointer sentence for
+    single-panel figures, but the question and format strings used to say "this
+    figure panel" unconditionally -- which reads oddly when there is only one
+    plot, and hints to the model that there may be others.  Single-panel figures
+    get "this figure"; the multi-panel wording is unchanged.
+
+        panel_phrase(1)         -> 'in this figure'
+        panel_phrase(4)         -> 'in this figure panel'
+        panel_phrase(1, 'for')  -> 'for this figure'
+    """
+    return lead + ' this figure' + ('' if nplots == 1 else ' panel')
+
+
 def context_single_multi(data, nplots, plot_num, use_words, single_figure_flag):
     if nplots == 1 and single_figure_flag:
         text_context = context(0, 0, use_words=use_words,
@@ -153,7 +170,7 @@ def get_format_adder(object, big_tag, val_type = 'an integer', nplots = 1,
     """
     adder = get_adder(nplots, use_words, use_list=use_list)
     # formatting for output
-    format = 'Please format the output as a json as {"'+big_tag+'":""} for this figure panel, where the "'+big_tag+'" value should be '+val_type+'.'
+    format = 'Please format the output as a json as {"'+big_tag+'":""} '+panel_phrase(nplots, 'for')+', where the "'+big_tag+'" value should be '+val_type+'.'
     return adder, format
 
 
@@ -163,12 +180,13 @@ def how_many(object, big_tag, val_type = 'an integer', nplots = 1,
     to_generate : flag for wording
     """
     if not to_generate:
-        q = 'How many '+object+' are there in the specified figure panel?'
+        q = 'How many '+object+' are there '+panel_phrase(nplots)+'?' if nplots == 1 \
+            else 'How many '+object+' are there in the specified figure panel?'
     else:
-        q = 'How many ' + object + ' were used to generate the data for the plot in the figure panel?'
+        q = 'How many ' + object + ' were used to generate the data for the plot '+panel_phrase(nplots)+'?'
     adder = get_adder(nplots, use_words)
     # formatting for output
-    format = 'Please format the output as a json as {"'+big_tag+'":""} for this figure panel, where the "'+big_tag+'" value should be '+val_type+'.'
+    format = 'Please format the output as a json as {"'+big_tag+'":""} '+panel_phrase(nplots, 'for')+', where the "'+big_tag+'" value should be '+val_type+'.'
     return q, adder, format
 
 
@@ -180,7 +198,7 @@ def how_much_data_values(big_tag, nplots=1, axis='x', val_type='a float',
         axis_words = 'along the ' + axis + '-axis'
     #q = 'What are the '+big_tag+' data values '+axis_words+' in this figure panel? '
     #q = 'What is the '+big_tag+' data value '+axis_words+' in this figure panel? ' # What is the median data value in this figure panel?
-    q = 'What is the '+big_tag+' value of the data '+axis_words+' in this figure panel? ' # What is the median data value in this figure panel?
+    q = 'What is the '+big_tag+' value of the data '+axis_words+' '+panel_phrase(nplots)+'? '
     adder = get_adder(nplots, use_words)
     # list or not?
     if 'list' in val_type:
@@ -188,7 +206,7 @@ def how_much_data_values(big_tag, nplots=1, axis='x', val_type='a float',
     else:
         outputf = '""'
     # formatting for output
-    format = 'Please format the output as a json as {"'+big_tag+' '+axis + '":'+outputf+'} for this figure panel, where the "'+big_tag+' '+axis +'" value should be '+val_type+', calculated from the '
+    format = 'Please format the output as a json as {"'+big_tag+' '+axis + '":'+outputf+'} '+panel_phrase(nplots, 'for')+', where the "'+big_tag+' '+axis +'" value should be '+val_type+', calculated from the '
     format += 'data values used to create the plot'+for_each+'.'
     # check formatting in case of any double spaces
     q = q.replace('  ', ' ')
@@ -213,7 +231,7 @@ def what_is_relationship(big_tag, nplots=1, axis='x', val_type='a float',
     else:
         axis = ''
     #q = 'What are the '+big_tag+' data values '+axis_words+' in this figure panel? '
-    q = 'What is the underlying '+big_tag+' used to create the data in this figure panel'+axis_words+'?'
+    q = 'What is the underlying '+big_tag+' used to create the data '+panel_phrase(nplots)+axis_words+'?'
     adder = get_adder(nplots, use_words, use_list=use_list)
     # list or not?
     if 'list' in val_type:
@@ -221,14 +239,14 @@ def what_is_relationship(big_tag, nplots=1, axis='x', val_type='a float',
     else:
         outputf = '""'
     # formatting for output
-    format = 'Please format the output as a json as {"'+big_tag+axis + '":'+outputf+'} for this figure panel, where the "'+big_tag+axis +'" value should be '+val_type+', calculated from the '
+    format = 'Please format the output as a json as {"'+big_tag+axis + '":'+outputf+'} '+panel_phrase(nplots, 'for')+', where the "'+big_tag+axis +'" value should be '+val_type+', calculated from the '
     format += 'data values used to create the plot'+for_each+'.'
     return q, adder, format
 
 
 def what_is_relationship_plot(big_tag, nplots=1, val_type='a float', 
                          use_words=True):
-    q = 'What is the '+big_tag+' used to create the plot in this figure panel?'
+    q = 'What is the '+big_tag+' used to create the plot '+panel_phrase(nplots)+'?'
     adder = get_adder(nplots, use_words)
     # list or not?
     if 'list' in val_type:
@@ -244,7 +262,7 @@ def what_is_relationship_plot(big_tag, nplots=1, val_type='a float',
     #format += '{"'+big_tag+ + '":'+outputf+'} '
     format += '{"' + big_tag + '":'+outputf+'} '
     #format += 'for this figure panel, where the "'+big_tag+ +'" value should be '+val_type+' for this plot.'
-    format += 'for this figure panel, where the "'+big_tag+'" value shoudl be '+val_type+' for this plot.'
+    format += panel_phrase(nplots, 'for')+', where the "'+big_tag+'" value shoudl be '+val_type+' for this plot.'
     return q, adder, format
 
 

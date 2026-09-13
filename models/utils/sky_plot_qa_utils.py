@@ -36,7 +36,7 @@ figure, so min/max/median/mean of the color data are legitimately readable.
 
 import numpy as np
 
-from .plot_qa_utils import (get_nplots, persona, context_single_multi,
+from .plot_qa_utils import (get_nplots, persona, context_single_multi, panel_phrase,
                             how_much_data_values, get_format_adder,
                             what_is_relationship)
 
@@ -435,6 +435,12 @@ def pixel_scale_arcsec(data, plot_num=0, verbose=False):
     return float(h_arcmin * 60.0 / colors.shape[0])
 
 
+def _panel(data, lead='in'):
+    """panel_phrase() straight from `data` -- these questions build their text
+    before _ask() computes nplots."""
+    return panel_phrase(get_nplots(data), lead)
+
+
 def _ask(data, qa_pairs, plot_num, level, tag, question, fmt, answer,
          use_words=True, single_figure_flag=True, text_persona=None,
          verbose=True, choices=None, return_qa=True):
@@ -463,10 +469,10 @@ def q_sky_epoch(data, qa_pairs, plot_num=0, verbose=True, use_list=True, **kw):
     """(1) Which coordinate epoch is stamped on the axes, if any."""
     ans = coordinate_epoch(data, plot_num)
     tag = 'epoch'
-    question = ('What coordinate epoch is given on the axis labels of this figure panel? '
-                'Answer "none" if no epoch is stated.')
-    fmt = ('Please format the output as a json as {"epoch":""} for this figure panel, '
-           'where the "epoch" value should be a string such as "J2000", "B1950" or "none".')
+    question = ('What coordinate epoch is given on the axis labels of ' + _panel(data)[3:] +
+                '? Answer "none" if no epoch is stated.')
+    fmt = ('Please format the output as a json as {"epoch":""} ' + _panel(data, 'for') +
+           ', where the "epoch" value should be a string such as "J2000", "B1950" or "none".')
     return _ask(data, qa_pairs, plot_num, 'Level 1', tag, question, fmt, ans,
                 verbose=verbose, **kw)
 
@@ -487,9 +493,9 @@ def q_sky_tick_unit(data, qa_pairs, plot_num=0, axis='x', verbose=True,
         else ['degrees', 'arcminutes', 'arcseconds']
     tag = 'finest unit ' + axis_name
     question = ('What is the smallest unit of angle shown on the ' + axis_name +
-                ' tick labels of this figure panel?')
+                ' tick labels of ' + _panel(data)[3:] + '?')
     fmt = ('Please format the output as a json as {"finest unit ' + axis_name +
-           '":""} for this figure panel, where the value should be a string.')
+           '":""} ' + _panel(data, 'for') + ', where the value should be a string.')
     return _ask(data, qa_pairs, plot_num, 'Level 1', tag, question, fmt, ans,
                 verbose=verbose, choices=choices if use_list else None, **kw)
 
@@ -505,10 +511,10 @@ def q_sky_field_extent(data, qa_pairs, plot_num=0, axis='height', verbose=True, 
         ans, name, extra = w, 'width', ('the right ascension axis, as a true angle on the '
                                         'sky (i.e. including the cos(declination) factor)')
     tag = 'field ' + name
-    question = ('What is the angular ' + name + ' of the sky region shown in this figure '
-                'panel, measured along ' + extra + '? Give the value in arcminutes.')
-    fmt = ('Please format the output as a json as {"field ' + name + '":""} for this figure '
-           'panel, where the value should be a float, expressed in arcminutes.')
+    question = ('What is the angular ' + name + ' of the sky region shown ' + _panel(data) +
+                ', measured along ' + extra + '? Give the value in arcminutes.')
+    fmt = ('Please format the output as a json as {"field ' + name + '":""} ' +
+           _panel(data, 'for') + ', where the value should be a float, expressed in arcminutes.')
     return _ask(data, qa_pairs, plot_num, 'Level 2', tag, question, fmt, ans,
                 verbose=verbose, **kw)
 
@@ -521,7 +527,7 @@ def q_sky_pixel_scale(data, qa_pairs, plot_num=0, verbose=True, **kw):
     tag = 'pixel scale'
     question = ('Approximately what angular size does a single pixel of this sky image '
                 'span? Give the value in arcseconds.')
-    fmt = ('Please format the output as a json as {"pixel scale":""} for this figure panel, '
-           'where the value should be a float, expressed in arcseconds per pixel.')
+    fmt = ('Please format the output as a json as {"pixel scale":""} ' + _panel(data, 'for') +
+           ', where the value should be a float, expressed in arcseconds per pixel.')
     return _ask(data, qa_pairs, plot_num, 'Level 3', tag, question, fmt, ans,
                 verbose=verbose, **kw)

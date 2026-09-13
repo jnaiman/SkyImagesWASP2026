@@ -1,5 +1,5 @@
 # this does general plot-level questions
-from .plot_qa_utils import get_nplots, persona, get_adder, context_single_multi
+from .plot_qa_utils import get_nplots, persona, get_adder, context_single_multi, panel_phrase
 
 def q_errorbars_existance_lines(data, qa_pairs, axis = 'x', plot_num = 0, return_qa=True, 
                                 use_words=True, verbose=True, single_figure_flag=True, 
@@ -9,13 +9,13 @@ def q_errorbars_existance_lines(data, qa_pairs, axis = 'x', plot_num = 0, return
     """
     
     big_tag = axis + '-errorbars'
+    nplots = get_nplots(data)
     ### question
-    text_question = 'Are there error bars on the data along the ' +axis+ '-axis in this figure panel?'
+    text_question = 'Are there error bars on the data along the ' +axis+ '-axis '+panel_phrase(nplots)+'?'
     ### format
     text_format = 'Please format the output as a json as {"'+axis+'-axis errors":""} where the value for the output is True '
     text_format += '(if error bars exist) or False (if error bars do not exist).'
 
-    nplots = get_nplots(data)
     adder = get_adder(nplots, use_words)
     # get answer
     if axis+'errs' in data['plot' + str(plot_num)]['data'].keys():

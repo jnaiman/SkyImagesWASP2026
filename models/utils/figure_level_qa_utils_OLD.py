@@ -137,21 +137,10 @@ def q_plot_titles(data, qa_pairs, return_qa=True, verbose=True,
     ### context for question
     text_context = '' # full figure
 
-    # Wording is chosen from the figure itself: everything this project generates
-    # is single-panel, and asking "for each figure panel" there both reads oddly
-    # and hints that there might be more than one.  The multi-panel branch is the
-    # original text, unchanged, so top-level multi-panel runs are unaffected.
-    # The JSON schema is the SAME in both branches -- still a list -- so the
-    # ground-truth answer below and any scoring code are untouched.
-    if get_nplots(data) == 1:
-        text_question = 'What is the title of the plot in this figure?'
-        text_format = 'Please format the output as a json as {"titles":[]}, where the list holds the title of the plot as its only element. '
-        text_format += " If the plot does not have a title, then denote this by an empty string in the list.  Please format any formulas in the title in a Python LaTeX string (for example 'Light $\\\\alpha$'). "
-    else:
-        text_question = 'What are the titles for each figure panel?'
-        text_format = 'Please format the output as a json as {"titles":[]}, where the list is a list of strings of all of the titles. '
-        text_format += 'If there is a single plot, this should be one element in this list, and if there are multiple plots the list should be in row-major (C-style) order.'
-        text_format += " If a plot does not have a title, then denote this by an empty string in the list.  Please format any formulas in the title in a Python LaTeX string (for example 'Light $\\\\alpha$'). "
+    text_question = 'What are the titles for each figure panel?'
+    text_format = 'Please format the output as a json as {"titles":[]}, where the list is a list of strings of all of the titles. '
+    text_format += 'If there is a single plot, this should be one element in this list, and if there are multiple plots the list should be in row-major (C-style) order.'
+    text_format += " If a plot does not have a title, then denote this by an empty string in the list.  Please format any formulas in the title in a Python LaTeX string (for example 'Light $\\\\alpha$'). "
 
     la = []
     for k,v in data.items():
@@ -185,17 +174,11 @@ def q_plot_axis_labels(data, qa_pairs, return_qa=True, verbose=True,
     ### context for question
     text_context = '' # full figure
     ### question
-    if get_nplots(data) == 1:
-        text_question = 'What is the '+axis+'-axis title of the plot in this figure?'
-        text_format = 'Please format the output as a json as {"'+axis+'labels":[]}, where the list holds the '+axis+'-axis title of the plot as its only element. '
-        text_format += "If the plot does not have an "+axis+"-axis title, then denote this by an empty string in the list.  "
-        text_format += "Please format any formulas in the title in a Python LaTeX string (for example 'Light $\\\\alpha$'). "
-    else:
-        text_question = 'What are the '+axis+'-axis titles for each figure panel?' # JPN update
-        text_format = 'Please format the output as a json as {"'+axis+'labels":[]}, where the list is a list of strings of all of the '+axis+'-axis titles. '
-        text_format += 'If there is a single plot, this should be one element in this list, and if there are multiple plots the list should be in row-major (C-style) order.'
-        text_format += " If a plot does not have an "+axis+"-axis title, then denote this by an empty string in the list.  "
-        text_format += "Please format any formulas in the title in a Python LaTeX string (for example 'Light $\\\\alpha$'). "
+    text_question = 'What are the '+axis+'-axis titles for each figure panel?' # JPN update
+    text_format = 'Please format the output as a json as {"'+axis+'labels":[]}, where the list is a list of strings of all of the '+axis+'-axis titles. '
+    text_format += 'If there is a single plot, this should be one element in this list, and if there are multiple plots the list should be in row-major (C-style) order.'
+    text_format += " If a plot does not have an "+axis+"-axis title, then denote this by an empty string in the list.  "
+    text_format += "Please format any formulas in the title in a Python LaTeX string (for example 'Light $\\\\alpha$'). "
     ### all together
     q = text_persona + " " + text_context + " " + text_question + " " + text_format
     ### labels
@@ -227,18 +210,11 @@ def q_ticklabels(data, qa_pairs, axis='x', return_qa=True, verbose=True, text_pe
     text_context = '' # full figure
     text_question = 'What are the values for each of the tick marks on the '+axis+'-axis?'
     ### format
-    # the question itself carries no panel wording; only the format string does
-    if get_nplots(data) == 1:
-        text_format = 'Please format the output as a json as {"'+axis+'tick values":[[]]}, where the outer list holds one element for the plot, '
-        text_format += 'and the inner list is a list of the '+axis+'-axis tick mark values. '
-        text_format += "If the plot does not have any "+axis+"-axis tick values, then denote this by an empty string in the inner list.  "
-        text_format += "Please format any formulas in the "+axis+"-axis tick values in a Python LaTeX string (for example 'Light $\\\\alpha$')."
-    else:
-        text_format = 'Please format the output as a json as {"'+axis+'tick values":[[]]}, where each element of the outer list refers to a single panel, '
-        text_format += 'and each inner list is a list of the '+axis+'-axis tick mark values. '
-        text_format += 'If there is a single plot, this should be one element in the outer list, and if there are multiple plots the outer list should be in row-major (C-style) order.'
-        text_format += " If a plot does not have any "+axis+"-axis tick values, then denote this by an empty string in the inner list.  "
-        text_format += "Please format any formulas in the "+axis+"-axis tick values in a Python LaTeX string (for example 'Light $\\\\alpha$')."
+    text_format = 'Please format the output as a json as {"'+axis+'tick values":[[]]}, where each element of the outer list refers to a single panel, '
+    text_format += 'and each inner list is a list of the '+axis+'-axis tick mark values. '
+    text_format += 'If there is a single plot, this should be one element in the outer list, and if there are multiple plots the outer list should be in row-major (C-style) order.'
+    text_format += " If a plot does not have any "+axis+"-axis tick values, then denote this by an empty string in the inner list.  "
+    text_format += "Please format any formulas in the "+axis+"-axis tick values in a Python LaTeX string (for example 'Light $\\\\alpha$')."
     q = text_persona + " " + text_context + " " + text_question + " " + text_format
     ### answer
     la = []
@@ -272,28 +248,19 @@ def q_plot_types(data, qa_pairs, plot_types, return_qa=True, use_list=True,
     ### persona of assistant
     text_persona = persona(text=text_persona)
     ### question
-    single = get_nplots(data) == 1
-    if single:
-        text_question = 'What is the plot type of the plot in this figure?'
-    else:
-        text_question = 'What are the plot types for each panel in the figure?'
+    text_question = 'What are the plot types for each panel in the figure?'
     ### context for question
     text_context = '' # full figure
     if use_list:
         adder = ' (list)'
-        text_context = ('Please choose the plot type from the following list: ['
-                        if single else
-                        'Please choose each plot type from the following list: [')
+        text_context = 'Please choose each plot type from the following list: ['
         for pt in plot_types:
             text_context += pt + ', '
         text_context = text_context[:-2] # take off the last bit
         text_context += '].'
     ### format
-    if single:
-        text_format = 'Please format the output as a json as {"plot types":[]}, where the list holds the plot type of the plot as its only element. '
-    else:
-        text_format = 'Please format the output as a json as {"plot types":[]}, where each element of the list refers to the plot type of a single panel. '
-        text_format += 'If there is a single plot, this should be one element in this list, and if there are multiple plots the list should be in row-major (C-style) order. '
+    text_format = 'Please format the output as a json as {"plot types":[]}, where each element of the list refers to the plot type of a single panel. '
+    text_format += 'If there is a single plot, this should be one element in this list, and if there are multiple plots the list should be in row-major (C-style) order. '
     # full q
     q = text_persona + " " + text_context + " " + text_question + " " + text_format
 
