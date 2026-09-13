@@ -64,6 +64,39 @@ def _displayed_pixel_limits(pdata, nx, ny):
     return (float(xl[0]), float(xl[1])), (float(yl[0]), float(yl[1]))
 
 
+def deg_to_hms(deg, seconds_decimals=2):
+    """
+    Right ascension in degrees -> the sexagesimal string the axis actually shows.
+
+    The generator renders RA ticks in hours/minutes/seconds (e.g. 18h47m20s), so
+    the ground truth for an RA question is given in those units rather than in
+    decimal degrees -- otherwise the answer is in units that appear nowhere on
+    the figure, and the model has to do a unit conversion the question never
+    asked for.
+
+    Declination is left in degrees: its ticks are degrees/arcmin/arcsec, which is
+    already a degree measure, and decimal degrees is the conventional way to
+    quote it.
+
+    24h wraps to 0h, and a value that rounds up to 60 carries into the next unit,
+    so 23h59m59.999s formats as 00h00m00.00s rather than 23h59m60.00s.
+    """
+    h_total = (float(deg) % 360.0) / 15.0
+    h = int(h_total)
+    m_total = (h_total - h) * 60.0
+    m = int(m_total)
+    s = round((m_total - m) * 60.0, seconds_decimals)
+    if s >= 60.0:                     # carry, after rounding
+        s -= 60.0
+        m += 1
+    if m >= 60:
+        m -= 60
+        h += 1
+    if h >= 24:
+        h -= 24
+    return '%02dh%02dm%0*.*fs' % (h, m, seconds_decimals + 3, seconds_decimals, s)
+
+
 def sky_radec_ranges(data, plot_num=0, verbose=False):
     """
     (ra_min, ra_max), (dec_min, dec_max) in DEGREES for the region displayed in
@@ -258,7 +291,14 @@ def q_stats_sky(data, qa_pairs, stat={'minimum': np.min}, axis='color',
         else:
             list_stat = float(0.5 * (rng[0] + rng[1]))
         axis_name = 'right ascension' if axis == 'x' else 'declination'
-        units = ' in degrees'
+        if axis == 'x':
+            # RA is quoted the way the axis shows it -- hours/minutes/seconds --
+            # so the answer type changes from a float to a string here.
+            list_stat = deg_to_hms(list_stat)
+            val_type = 'a string'
+            units = ' in hours, minutes and seconds (for example 18h47m20.50s)'
+        else:
+            units = ' in degrees'
 
     nplots = get_nplots(data)
     text_persona = persona(text=text_persona)
