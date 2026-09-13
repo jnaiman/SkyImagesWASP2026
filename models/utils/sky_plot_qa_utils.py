@@ -343,3 +343,185 @@ def q_relationship_sky(data, qa_pairs, plot_num=0,
                        'note': 'sky panels are either a real SkyView cutout or a synthetic gaussian-mixture sky',
                        'persona': text_persona, 'context': text_context,
                        'question': text_question, 'format': text_format})
+
+
+# ===================================================================
+#  Additional sky-specific questions
+#  All of these are answerable for BOTH a real cutout and a GMM sky --
+#  see the note in sky_radec_ranges about why that symmetry matters.
+# ===================================================================
+
+import re
+
+# RA ticks are always rendered sexagesimal, but by two different formatters:
+# \mathrm{h} and \mathregular{^h}.  That difference is invisible in the image,
+# so it must NOT be asked about.  What IS visible is the finest unit shown.
+_RA_UNITS = [('seconds', ('mathrm{s}', 'mathregular{^s}')),
+             ('minutes', ('mathrm{m}', 'mathregular{^m}')),
+             ('hours',   ('mathrm{h}', 'mathregular{^h}'))]
+_DEC_UNITS = [('arcseconds', ('\\prime\\prime', "''")),
+              ('arcminutes', ('\\prime', "'")),
+              ('degrees',    ('circ', '°'))]
+
+
+def _tick_strings(data, plot_num, axis):
+    key = 'xticks' if axis == 'x' else 'yticks'
+    return [str(t.get('data', '')) for t in (data['plot' + str(plot_num)].get(key) or [])]
+
+
+def finest_tick_unit(data, plot_num=0, axis='x'):
+    """
+    The smallest unit appearing on an axis' tick labels: hours/minutes/seconds
+    for RA, degrees/arcminutes/arcseconds for DEC.  None if undeterminable.
+    """
+    ticks = _tick_strings(data, plot_num, axis)
+    if not ticks:
+        return None
+    blob = ' '.join(ticks)
+    for name, marks in (_RA_UNITS if axis == 'x' else _DEC_UNITS):
+        if any(m in blob for m in marks):
+            return name
+    return None
+
+
+def coordinate_epoch(data, plot_num=0):
+    """
+    The epoch stamped on the axis labels ('J2000', 'B1950', '1900', ...), or
+    'none'.  The generator appends it with a random style -- 'J2000',
+    '(J2000)', '(2000)', '(B2000)' -- so accept all of them.
+    """
+    p = data['plot' + str(plot_num)]
+    lab = ((p.get('xlabel') or {}).get('words') or '') + ' ' + \
+          ((p.get('ylabel') or {}).get('words') or '')
+    m = re.search(r'([JB])\s?(\d{4})', lab)
+    if m:
+        return m.group(1) + m.group(2)
+    m = re.search(r'\((\d{4})\)', lab)
+    if m:
+        return m.group(1)
+    m = re.search(r'(?<![\d.])(1[89]\d{2}|20\d{2})(?![\d.])', lab)
+    return m.group(1) if m else 'none'
+
+
+def field_extent(data, plot_num=0, verbose=False):
+    """
+    (width_arcmin, height_arcmin) of the field drawn.
+
+    Height is the declination span -- an angle directly.  Width is the right
+    ascension span scaled by cos(dec), which is the true angle on the sky; a
+    raw RA difference is not an angle away from the equator.  Returns
+    (None, None) when RA/DEC can't be derived.
+    """
+    ra, dec = sky_radec_ranges(data, plot_num=plot_num, verbose=verbose)
+    if ra is None:
+        return None, None
+    h = (dec[1] - dec[0]) * 60.0
+    w = (ra[1] - ra[0]) * np.cos(np.radians(0.5 * (dec[0] + dec[1]))) * 60.0
+    return float(abs(w)), float(abs(h))
+
+
+def pixel_scale_arcsec(data, plot_num=0, verbose=False):
+    """
+    Approximate arcsec per image pixel, from the declination extent divided by
+    the number of rows.  Uses the vertical axis so no cos(dec) factor is
+    involved.  None when RA/DEC can't be derived.
+    """
+    _, h_arcmin = field_extent(data, plot_num=plot_num, verbose=verbose)
+    if h_arcmin is None:
+        return None
+    colors = np.asarray(data['plot' + str(plot_num)]['data']['colors'])
+    if colors.ndim != 2 or colors.shape[0] == 0:
+        return None
+    return float(h_arcmin * 60.0 / colors.shape[0])
+
+
+def _ask(data, qa_pairs, plot_num, level, tag, question, fmt, answer,
+         use_words=True, single_figure_flag=True, text_persona=None,
+         verbose=True, choices=None, return_qa=True):
+    """Shared assembly for the questions below."""
+    from .plot_qa_utils import get_adder
+    nplots = get_nplots(data)
+    adder = get_adder(nplots, use_words)
+    text_persona = persona(text=text_persona)
+    text_context = context_single_multi(data, nplots, plot_num, use_words, single_figure_flag)
+    if choices:
+        text_context += (' Please choose your answer from the following list: ['
+                         + ', '.join(choices) + '].')
+    q = text_persona + " " + text_context + " " + question + " " + fmt
+    a = {tag + adder: answer}
+    if verbose:
+        print('QUESTION:', q)
+        print('ANSWER:', a)
+    if not return_qa:
+        return qa_pairs
+    return _store(qa_pairs, level, tag + adder, plot_num,
+                  {'Q': q, 'A': a, 'persona': text_persona, 'context': text_context,
+                   'question': question, 'format': fmt})
+
+
+def q_sky_epoch(data, qa_pairs, plot_num=0, verbose=True, use_list=True, **kw):
+    """(1) Which coordinate epoch is stamped on the axes, if any."""
+    ans = coordinate_epoch(data, plot_num)
+    tag = 'epoch'
+    question = ('What coordinate epoch is given on the axis labels of this figure panel? '
+                'Answer "none" if no epoch is stated.')
+    fmt = ('Please format the output as a json as {"epoch":""} for this figure panel, '
+           'where the "epoch" value should be a string such as "J2000", "B1950" or "none".')
+    return _ask(data, qa_pairs, plot_num, 'Level 1', tag, question, fmt, ans,
+                verbose=verbose, **kw)
+
+
+def q_sky_tick_unit(data, qa_pairs, plot_num=0, axis='x', verbose=True,
+                    use_list=True, **kw):
+    """
+    (2) The finest unit shown on an axis.
+
+    NOT "sexagesimal vs decimal" -- the generator always renders RA
+    sexagesimally; only the LaTeX markup differs, which the image does not show.
+    """
+    ans = finest_tick_unit(data, plot_num, axis)
+    if ans is None:
+        return qa_pairs
+    axis_name = 'right ascension' if axis == 'x' else 'declination'
+    choices = ['hours', 'minutes', 'seconds'] if axis == 'x' \
+        else ['degrees', 'arcminutes', 'arcseconds']
+    tag = 'finest unit ' + axis_name
+    question = ('What is the smallest unit of angle shown on the ' + axis_name +
+                ' tick labels of this figure panel?')
+    fmt = ('Please format the output as a json as {"finest unit ' + axis_name +
+           '":""} for this figure panel, where the value should be a string.')
+    return _ask(data, qa_pairs, plot_num, 'Level 1', tag, question, fmt, ans,
+                verbose=verbose, choices=choices if use_list else None, **kw)
+
+
+def q_sky_field_extent(data, qa_pairs, plot_num=0, axis='height', verbose=True, **kw):
+    """(3) Angular size of the field, in arcminutes."""
+    w, h = field_extent(data, plot_num, verbose=False)
+    if w is None:
+        return qa_pairs
+    if axis == 'height':
+        ans, name, extra = h, 'height', 'the declination axis'
+    else:
+        ans, name, extra = w, 'width', ('the right ascension axis, as a true angle on the '
+                                        'sky (i.e. including the cos(declination) factor)')
+    tag = 'field ' + name
+    question = ('What is the angular ' + name + ' of the sky region shown in this figure '
+                'panel, measured along ' + extra + '? Give the value in arcminutes.')
+    fmt = ('Please format the output as a json as {"field ' + name + '":""} for this figure '
+           'panel, where the value should be a float, expressed in arcminutes.')
+    return _ask(data, qa_pairs, plot_num, 'Level 2', tag, question, fmt, ans,
+                verbose=verbose, **kw)
+
+
+def q_sky_pixel_scale(data, qa_pairs, plot_num=0, verbose=True, **kw):
+    """(5) Approximate angular size of one image pixel, in arcseconds."""
+    ans = pixel_scale_arcsec(data, plot_num, verbose=False)
+    if ans is None:
+        return qa_pairs
+    tag = 'pixel scale'
+    question = ('Approximately what angular size does a single pixel of this sky image '
+                'span? Give the value in arcseconds.')
+    fmt = ('Please format the output as a json as {"pixel scale":""} for this figure panel, '
+           'where the value should be a float, expressed in arcseconds per pixel.')
+    return _ask(data, qa_pairs, plot_num, 'Level 3', tag, question, fmt, ans,
+                verbose=verbose, **kw)

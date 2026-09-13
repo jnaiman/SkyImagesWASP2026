@@ -27,7 +27,9 @@ import numpy as np
 from .contour_plot_qa_utils import (q_stats_contours, q_relationship_contour,
                                     q_contour_plot_image_or_lines)
 from .sky_plot_qa_utils import (q_stats_sky, q_relationship_sky,
-                                q_sky_image_or_lines, SKY_LINE_LIST)
+                                q_sky_image_or_lines, SKY_LINE_LIST,
+                                q_sky_epoch, q_sky_tick_unit,
+                                q_sky_field_extent, q_sky_pixel_scale)
 from .general_plot_level_qa_utils import q_errorbars_existance_lines
 
 
@@ -99,7 +101,8 @@ def plot_level_general_qa(data, qa_pairs, iplot, axes=('x', 'y'), verbose_qa=Fal
 
 def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
                       line_list=None, verbose_qa=False,
-                      ask_image_or_lines=False, ask_radec=True):
+                      ask_image_or_lines=False, ask_radec=True,
+                      ask_extras=True):
     """
     Every "image of the sky" question, for panel `iplot`.
 
@@ -110,11 +113,17 @@ def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
     ask_radec : include min/max/median/mean of RA and DEC, derived from the
         panel's WCS over the displayed region.  Automatically skipped per-panel
         when no WCS is stored.  Set False for color-only statistics.
+    ask_extras : include the sky-specific questions - coordinate epoch, finest
+        tick unit on each axis, angular field width/height, and pixel scale.
+        Each is skipped individually when it cannot be determined.
 
     Levels:
       L1  (optional) image vs contour lines vs both
-      L2  min/max/median/mean of the color values, and of RA/DEC in degrees
-      L3  real image of the sky vs gaussian mixture model
+      L1  (extras) coordinate epoch, finest unit on the RA and DEC ticks
+      L2  min/max/median/mean of the color values, and of RA/DEC in degrees;
+          (extras) angular field height and width in arcmin
+      L3  real image of the sky vs gaussian mixture model;
+          (extras) pixel scale in arcsec
     """
     if stats is None:
         stats = STATS
@@ -140,4 +149,18 @@ def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
                                   return_qa=True, use_words=True,
                                   use_list=True, line_list=line_list,
                                   verbose=verbose_qa)
+
+    ######### sky-specific extras #########
+    if ask_extras:
+        # L1 -- read straight off the axes
+        qa_pairs = q_sky_epoch(data, qa_pairs, plot_num=iplot, verbose=verbose_qa)
+        for axis in ['x', 'y']:
+            qa_pairs = q_sky_tick_unit(data, qa_pairs, plot_num=iplot, axis=axis,
+                                       verbose=verbose_qa)
+        # L2 -- requires reading both ends of an axis
+        for extent_axis in ['height', 'width']:
+            qa_pairs = q_sky_field_extent(data, qa_pairs, plot_num=iplot,
+                                          axis=extent_axis, verbose=verbose_qa)
+        # L3 -- extent divided by the visible grid
+        qa_pairs = q_sky_pixel_scale(data, qa_pairs, plot_num=iplot, verbose=verbose_qa)
     return qa_pairs
