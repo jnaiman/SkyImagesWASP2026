@@ -72,6 +72,28 @@ mpirun -np 6 python single/create_figures_batch.py -save_dir ./figs/ -number_of_
 
 The script below keeps the full behaviour, multi-panel included.
 
+The example of 5 each:
+```bash
+cd /Users/jnaiman/SkyImagesWASP2026
+OUT=/Users/jnaiman/Dropbox/WASP2026/tests/test4
+
+# 1. contour                     -> Picture_000001-000005
+mpirun -np 5 python single/create_figures_batch.py \
+    -save_dir $OUT/ -start_index 0 -number_of_figures 5 -nProcs 5 \
+    -plot_types "contour"
+
+# 2. image of the sky, GMM       -> Picture_000006-000010
+mpirun -np 5 python single/create_figures_batch.py \
+    -save_dir $OUT/ -start_index 5 -number_of_figures 5 -nProcs 5 \
+    -plot_types "image of the sky" -sky_source gmm
+
+# 3. image of the sky, REAL      -> Picture_000011-000015
+#    no -sky_local_only, so SkyView is queried over the web
+mpirun -np 5 python single/create_figures_batch.py \
+    -save_dir $OUT/ -start_index 10 -number_of_figures 5 -nProcs 5 \
+    -plot_types "image of the sky" -sky_source astroquery
+```
+
 ### The knobs that matter
 
 | flag | default | |
