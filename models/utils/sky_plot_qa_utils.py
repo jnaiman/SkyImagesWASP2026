@@ -64,6 +64,105 @@ def _displayed_pixel_limits(pdata, nx, ny):
     return (float(xl[0]), float(xl[1])), (float(yl[0]), float(yl[1]))
 
 
+# Should the "data" statistics be restricted to the part of the image the panel
+# actually shows?  False (the default) means they describe every data point used
+# to make the image, matching how the colour statistics and every contour
+# statistic already work -- `f(data['plotN']['data'][axis+'s'])`.
+#
+# It matters here in a way it does not for contour: the real-sky path zooms into
+# 50-100% of the cutout, so on most real-sky panels a large part of the data sits
+# outside the axes and cannot be read off the figure.  Set True to make the data
+# statistics describe only the visible sub-region instead.  The axis-limit
+# questions are unaffected either way -- they are always about the view.
+SKY_DATA_WITHIN_VIEW = True
+
+
+def sky_radec_data(data, plot_num=0, within_view=None, verbose=False):
+    """
+    RA and DEC (degrees) of every data point used to make the image, as two flat
+    arrays, or (None, None) if they cannot be determined.
+
+    This is the DATA, not the axis range -- contrast sky_radec_ranges(), which
+    gives the corners of the region the panel displays.  The two differ whenever
+    the panel is zoomed.
+
+      * GMM sky  -- xs/ys are already RA/DEC in degrees, one per grid column and
+                    row, so the data points are their outer product.
+      * real sky -- xs/ys are pixel indices; the RA/DEC of each pixel comes from
+                    the stored WCS.  RA and DEC are not separable when the
+                    projection is rotated, so the full 2-D grid is evaluated
+                    rather than the two axes independently.
+    """
+    if within_view is None:
+        within_view = SKY_DATA_WITHIN_VIEW
+    pdata = data['plot' + str(plot_num)]
+    dparams = (pdata.get('data') or {}).get('data params') or {}
+    hdr = dparams.get('WCS header string')
+
+    # ---- GMM sky: xs/ys are already degrees ----
+    if not hdr:
+        if pdata.get('distribution') != 'gmm':
+            if verbose:
+                print('[sky qa] no WCS and not a gmm sky -- skipping RA/DEC questions')
+            return None, None
+        try:
+            xs = np.asarray(pdata['data']['xs'], dtype=float)
+            ys = np.asarray(pdata['data']['ys'], dtype=float)
+            if xs.size == 0 or ys.size == 0:
+                return None, None
+            ra, dec = np.meshgrid(xs, ys)
+            ra, dec = ra.ravel(), dec.ravel()
+            if xs.max() - xs.min() > 180.0:
+                # the panel straddles RA=0, so min/max/mean of RA are meaningless.
+                # DEC is unaffected, so only RA is suppressed.
+                if verbose:
+                    print('[sky qa] gmm panel straddles the RA=0 wrap -- dropping RA only')
+                return None, dec
+            return ra, dec
+        except Exception as e:
+            if verbose:
+                print('[sky qa] could not read gmm RA/DEC:', e)
+            return None, None
+
+    # ---- real sky: pixel grid + WCS ----
+    try:
+        from astropy.wcs import WCS
+    except ImportError:
+        if verbose:
+            print('[sky qa] astropy not available -- skipping RA/DEC questions')
+        return None, None
+    try:
+        colors = np.asarray(pdata['data']['colors'])
+        if colors.ndim != 2:
+            return None, None
+        ny, nx = colors.shape
+        if within_view:
+            (x0, x1), (y0, y1) = _displayed_pixel_limits(pdata, nx, ny)
+            xi = np.arange(int(np.ceil(min(x0, x1))), int(np.floor(max(x0, x1))) + 1)
+            yi = np.arange(int(np.ceil(min(y0, y1))), int(np.floor(max(y0, y1))) + 1)
+            xi = xi[(xi >= 0) & (xi < nx)]
+            yi = yi[(yi >= 0) & (yi < ny)]
+        else:
+            xi, yi = np.arange(nx), np.arange(ny)
+        if xi.size == 0 or yi.size == 0:
+            return None, None
+        gx, gy = np.meshgrid(xi.astype(float), yi.astype(float))
+        ra, dec = WCS(hdr).pixel_to_world_values(gx.ravel(), gy.ravel())
+        ra = np.asarray(ra, dtype=float)
+        dec = np.asarray(dec, dtype=float)
+        if not np.all(np.isfinite(ra)) or not np.all(np.isfinite(dec)):
+            return None, None
+        if ra.max() - ra.min() > 180.0:
+            if verbose:
+                print('[sky qa] panel straddles the RA=0 wrap -- dropping RA only')
+            return None, dec
+        return ra, dec
+    except Exception as e:
+        if verbose:
+            print('[sky qa] could not compute RA/DEC from WCS:', e)
+        return None, None
+
+
 def deg_to_hms(deg, seconds_decimals=2):
     """
     Right ascension in degrees -> the sexagesimal string the axis actually shows.
@@ -138,8 +237,8 @@ def sky_radec_ranges(data, plot_num=0, verbose=False):
             dec = (float(ys.min()), float(ys.max()))
             if ra[1] - ra[0] > 180.0:
                 if verbose:
-                    print('[sky qa] gmm panel straddles the RA=0 wrap -- skipping')
-                return None, None
+                    print('[sky qa] gmm panel straddles the RA=0 wrap -- dropping RA only')
+                return None, dec      # DEC is still well defined across the wrap
             return ra, dec
         except Exception as e:
             if verbose:
@@ -173,11 +272,12 @@ def sky_radec_ranges(data, plot_num=0, verbose=False):
             return None, None
         # RA wraps at 360; if the box straddles the wrap the min/max are
         # meaningless, so bail rather than emit a wrong answer
+        dec_rng = (float(dec.min()), float(dec.max()))
         if ra.max() - ra.min() > 180.0:
             if verbose:
-                print('[sky qa] panel straddles the RA=0 wrap -- skipping')
-            return None, None
-        return (float(ra.min()), float(ra.max())), (float(dec.min()), float(dec.max()))
+                print('[sky qa] panel straddles the RA=0 wrap -- dropping RA only')
+            return None, dec_rng      # DEC is still well defined across the wrap
+        return (float(ra.min()), float(ra.max())), dec_rng
     except Exception as e:
         if verbose:
             print('[sky qa] could not derive RA/DEC:', e)
@@ -277,19 +377,16 @@ def q_stats_sky(data, qa_pairs, stat={'minimum': np.min}, axis='color',
         axis_name = 'color'
         units = ''
     else:
-        ra_rng, dec_rng = sky_radec_ranges(data, plot_num=plot_num, verbose=verbose)
-        if ra_rng is None:
-            return qa_pairs                      # no WCS -> do not ask
-        rng = ra_rng if axis == 'x' else dec_rng
-        # min/max are the box edges; median/mean are its centre, since the grid
-        # is regular in pixel space and (to a good approximation) in world space
-        # across a single cutout
-        if f is np.min:
-            list_stat = float(rng[0])
-        elif f is np.max:
-            list_stat = float(rng[1])
-        else:
-            list_stat = float(0.5 * (rng[0] + rng[1]))
+        # the statistic is taken over the DATA -- every RA/DEC used to make the
+        # image -- exactly as the colour statistic above is taken over every
+        # value in `colors`, and as every contour statistic is taken over the
+        # stored xs/ys.  The axis range is a different question, asked separately
+        # by q_sky_axis_limit().
+        ras, decs = sky_radec_data(data, plot_num=plot_num, verbose=verbose)
+        vals = ras if axis == 'x' else decs
+        if vals is None:
+            return qa_pairs     # no WCS, or RA is meaningless across the RA=0 wrap
+        list_stat = float(f(vals))
         axis_name = 'right ascension' if axis == 'x' else 'declination'
         if axis == 'x':
             # RA is quoted the way the axis shows it -- hours/minutes/seconds --
@@ -556,6 +653,51 @@ def q_sky_field_extent(data, qa_pairs, plot_num=0, axis='height', verbose=True, 
     fmt = ('Please format the output as a json as {"field ' + name + '":""} ' +
            _panel(data, 'for') + ', where the value should be a float, expressed in arcminutes.')
     return _ask(data, qa_pairs, plot_num, 'Level 2', tag, question, fmt, ans,
+                verbose=verbose, **kw)
+
+
+def q_sky_axis_limit(data, qa_pairs, plot_num=0, axis='x', which='minimum',
+                     verbose=True, **kw):
+    """
+    (new) The axis limits themselves -- matplotlib's get_xlim()/get_ylim() for
+    the panel, expressed in world coordinates.
+
+    Distinct from the min/max data questions above, and deliberately so: the
+    real-sky path zooms into 50-100% of the cutout, so the range the axis spans
+    is usually narrower than the range the data covers.  This question is about
+    what the figure shows; that one is about what the data contains.
+
+    Worded without reference to a left or right edge -- right ascension
+    conventionally increases to the LEFT on a sky image, so "the value at the
+    left edge" is the maximum, not the minimum, and asking that way would test
+    the convention rather than the reading.
+    """
+    ra_rng, dec_rng = sky_radec_ranges(data, plot_num=plot_num, verbose=False)
+    rng = ra_rng if axis == 'x' else dec_rng
+    if rng is None:
+        return qa_pairs
+    val = rng[0] if which == 'minimum' else rng[1]
+
+    axis_name = 'right ascension' if axis == 'x' else 'declination'
+    if axis == 'x':
+        ans = deg_to_hms(val)
+        units = 'hours, minutes and seconds (for example 18h47m20.50s)'
+        val_type = 'a string'
+    else:
+        ans = float(val)
+        units = 'degrees'
+        val_type = 'a float'
+
+    size = 'smallest' if which == 'minimum' else 'largest'
+    tag = '%s %s axis limit' % (which, axis_name)
+    question = ('What is the ' + size + ' ' + axis_name + ' value covered by the ' +
+                axis_name + ' axis of this figure -- that is, the ' +
+                ('lower' if which == 'minimum' else 'upper') + ' limit of the axis range, '
+                'not of the data? Give the value in ' + units + '.')
+    fmt = ('Please format the output as a json as {"' + tag + '":""} ' + _panel(data, 'for') +
+           ', where the "' + tag + '" value should be ' + val_type + ', read from the ' +
+           axis_name + ' axis, expressed in ' + units + '.')
+    return _ask(data, qa_pairs, plot_num, 'Level 1', tag, question, fmt, ans,
                 verbose=verbose, **kw)
 
 

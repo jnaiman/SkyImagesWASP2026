@@ -29,7 +29,8 @@ from .contour_plot_qa_utils import (q_stats_contours, q_relationship_contour,
 from .sky_plot_qa_utils import (q_stats_sky, q_relationship_sky,
                                 q_sky_image_or_lines, SKY_LINE_LIST,
                                 q_sky_epoch, q_sky_tick_unit,
-                                q_sky_field_extent, q_sky_pixel_scale)
+                                q_sky_field_extent, q_sky_pixel_scale,
+                                q_sky_axis_limit)
 from .general_plot_level_qa_utils import q_errorbars_existance_lines
 
 
@@ -102,7 +103,7 @@ def plot_level_general_qa(data, qa_pairs, iplot, axes=('x', 'y'), verbose_qa=Fal
 def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
                       line_list=None, verbose_qa=False,
                       ask_image_or_lines=False, ask_radec=True,
-                      ask_extras=True):
+                      ask_extras=True, ask_axis_limits=True):
     """
     Every "image of the sky" question, for panel `iplot`.
 
@@ -110,15 +111,22 @@ def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
         sky panels (the generator weights it 1000/1/1, so the answer is "image"
         ~99.8% of the time).  Off by default -- a near-constant answer inflates
         accuracy without measuring anything.  Set True to include it.
-    ask_radec : include min/max/median/mean of RA and DEC, derived from the
-        panel's WCS over the displayed region.  Automatically skipped per-panel
-        when no WCS is stored.  Set False for color-only statistics.
+    ask_radec : include min/max/median/mean of RA and DEC, taken over every
+        data point used to make the image -- the same footing as the colour
+        statistics, and as every contour statistic.  Automatically skipped
+        per-panel when the coordinates cannot be determined.  Set False for
+        colour-only statistics.
+    ask_axis_limits : include the lower/upper limit of each axis -- what the
+        panel displays, as opposed to what the data covers.  These differ
+        whenever the panel is zoomed, which the real-sky path does on almost
+        every figure.
     ask_extras : include the sky-specific questions - coordinate epoch, finest
         tick unit on each axis, angular field width/height, and pixel scale.
         Each is skipped individually when it cannot be determined.
 
     Levels:
       L1  (optional) image vs contour lines vs both
+      L1  lower/upper limit of the RA and DEC axes
       L1  (extras) coordinate epoch, finest unit on the RA and DEC ticks
       L2  min/max/median/mean of the color values, and of RA/DEC in degrees;
           (extras) angular field height and width in arcmin
@@ -149,6 +157,14 @@ def plot_level_sky_qa(data, qa_pairs, iplot, stats=None,
                                   return_qa=True, use_words=True,
                                   use_list=True, line_list=line_list,
                                   verbose=verbose_qa)
+
+    ######### axis limits -- the view, not the data #########
+    if ask_axis_limits:
+        for lim_axis in ['x', 'y']:
+            for which in ['minimum', 'maximum']:
+                qa_pairs = q_sky_axis_limit(data, qa_pairs, plot_num=iplot,
+                                            axis=lim_axis, which=which,
+                                            verbose=verbose_qa)
 
     ######### sky-specific extras #########
     if ask_extras:
