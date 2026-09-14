@@ -740,7 +740,8 @@ def q_sky_axis_limit(data, qa_pairs, plot_num=0, axis='x', which='minimum',
         units = 'degrees'
         val_type = 'a float'
 
-    size = 'smallest' if which == 'minimum' else 'largest'
+    #size = 'smallest' if which == 'minimum' else 'largest'
+    size = 'minimum' if which == 'minimum' else 'maximum'
     tag = '%s %s axis limit' % (which, axis_name)
     question = ('What is the ' + size + ' ' + axis_name + ' value covered by the ' +
                 axis_name + ' axis of this figure -- that is, the ' +
