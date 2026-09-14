@@ -54,7 +54,16 @@ BOX_KEYS = ('square', 'title', 'xlabel', 'ylabel', 'color bar')
 LIST_KEYS = ('xticks', 'yticks', 'color bar ticks')
 
 _KP_PREFIX = 'ann'
-_N_PER_EDGE = 8          # perimeter samples per edge, beyond the corners
+
+# Perimeter sampling.  A FIXED number of points per edge is the wrong unit: the
+# plot square's long edge is ~1000 px, so eight samples sit 127 px apart, and
+# although every sample lands exactly on the transformed curve, the polyline
+# between them chords straight across anything narrower than that -- a fold's
+# dip-and-recover shows up as a single slope down.  Sampling by DISTANCE keeps
+# the resolution constant whether the box is a plot border or a tick label.
+_POINT_SPACING = 10      # px between perimeter samples
+_MIN_PER_EDGE = 4        # even a tiny tick-label box gets a few
+_MAX_PER_EDGE = 300      # and an enormous one does not explode
 
 
 def _box_to_quad(d, img_height, flip_ycoord):
@@ -106,43 +115,59 @@ def quad_to_aabb(quad):
             int(q[:, 0].max()), int(q[:, 1].max())]
 
 
-def _perimeter_points(quad, n_per_edge=_N_PER_EDGE):
-    """A ring of points around `quad`, so the outline survives dropped points."""
+def _perimeter_points(quad, spacing=_POINT_SPACING):
+    """
+    A ring of points around `quad`, sampled every `spacing` pixels.
+
+    Dense enough that the polyline through the transformed points follows the
+    warp rather than chording across it, and dense enough that the outline
+    survives an effect deleting some of the points.
+    """
     q = np.asarray(quad, dtype=float)
     pts = []
     for i in range(len(q)):
         a, b = q[i], q[(i + 1) % len(q)]
-        for t in np.linspace(0.0, 1.0, n_per_edge + 1)[:-1]:
+        length = float(np.linalg.norm(b - a))
+        n = int(np.clip(round(length / max(spacing, 1e-6)),
+                        _MIN_PER_EDGE, _MAX_PER_EDGE))
+        for t in np.linspace(0.0, 1.0, n + 1)[:-1]:
             pts.append(a + (b - a) * t)
     return [[int(round(p[0])), int(round(p[1]))] for p in pts]
 
 
-def flatten_quads(labelled_quads, n_per_edge=_N_PER_EDGE):
+def flatten_quads(labelled_quads, spacing=_POINT_SPACING):
     """
     (labels, keypoints_dict) ready to hand to AugraphyPipeline.
 
     One label per box -- see note 2 in the module docstring -- each carrying a
-    perimeter ring rather than bare corners.
+    perimeter ring rather than bare corners.  Ring lengths differ per box, which
+    is fine: each has its own keypoint label, so nothing has to be regrouped by
+    a fixed stride afterwards.
     """
     labels = [lab for lab, _ in labelled_quads]
-    keypoints = {'%s%d' % (_KP_PREFIX, i): _perimeter_points(q, n_per_edge)
+    keypoints = {'%s%d' % (_KP_PREFIX, i): _perimeter_points(q, spacing)
                  for i, (_, q) in enumerate(labelled_quads)}
     return labels, keypoints
 
 
 def _outline(points, fallback):
     """
-    Convex hull of the surviving points, as an outline to draw.
+    The transformed outline, as the surviving perimeter points in ring order.
 
-    Squish can delete a whole edge's worth of points; with fewer than three
-    left there is nothing to rebuild from, so the original outline is returned
-    and the caller is told it is stale.
+    Kept in order rather than reduced to a convex hull: the hull would straighten
+    exactly the deviations worth seeing.  Order survives augraphy's keypoint
+    handling -- checked on Folding, Geometric and SectionShift, where the step
+    between consecutive returned points stays near the spacing that was sent.
+    Squish is the exception: it deletes the points on the columns it removes, so
+    the ring acquires a gap and the outline cuts straight across it.  That is the
+    honest picture -- that strip of page no longer exists.
+
+    With fewer than three points left there is nothing to draw, so the original
+    outline is returned and the caller is told it is stale.
     """
-    pts = np.asarray(points, dtype=np.int32)
-    if len(pts) < 3:
+    if len(points) < 3:
         return [list(map(int, p)) for p in fallback], False
-    hull = cv2.convexHull(pts.reshape(-1, 1, 2)).reshape(-1, 2)
-    return [[int(x), int(y)] for x, y in hull], True
+    return [[int(x), int(y)] for x, y in points], True
 
 
 def unpack_result(result, labels, keypoints_sent, grayscale=False):
@@ -180,12 +205,20 @@ def unpack_result(result, labels, keypoints_sent, grayscale=False):
 
 
 def draw_quads(img, labelled_quads, linethick=3, fill_blocks=False,
-               label_text=False, font_scale=1.0, as_rectangles=False):
-    """Draw each outline onto a copy of `img`, coloured by label."""
+               label_text=False, font_scale=1.0, warped_boxes=True):
+    """
+    Draw each outline onto a copy of `img`, coloured by label.
+
+    warped_boxes : True (default) draws the full transformed outline -- the
+        perimeter as the aging left it, so a fold bows the edge, a rotation
+        tilts it and a squish cuts a notch out of it.  False collapses each
+        outline to its axis-aligned bounding rectangle, which is what a detector
+        trained on rectangles would consume, at the cost of hiding the warp.
+    """
     canvas = deepcopy(img)
     for label, quad in labelled_quads:
         color = BOX_COLORS.get(label, (0, 0, 255))
-        if as_rectangles:
+        if not warped_boxes:
             x1, y1, x2, y2 = quad_to_aabb(quad)
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color,
                           -1 if fill_blocks else linethick)
@@ -211,7 +244,7 @@ def _factory(name):
 
 
 def age_with_quads(img, labelled_quads, effects_by_phase, seed=None,
-                   grayscale=False, n_per_edge=_N_PER_EDGE):
+                   grayscale=False, spacing=_POINT_SPACING):
     """
     Age `img` and carry the annotation outlines through the same transforms.
 
@@ -223,7 +256,7 @@ def age_with_quads(img, labelled_quads, effects_by_phase, seed=None,
     """
     from augraphy import AugraphyPipeline
 
-    labels, keypoints = flatten_quads(labelled_quads, n_per_edge)
+    labels, keypoints = flatten_quads(labelled_quads, spacing)
     pipeline = AugraphyPipeline(
         ink_phase=[_factory(n) for n in effects_by_phase.get('ink', [])],
         paper_phase=[_factory(n) for n in effects_by_phase.get('paper', [])],
@@ -238,7 +271,7 @@ def add_annotations_transform(img, datas_plot, effects_by_phase, seed=None,
                               grayscale=False, keys=BOX_KEYS,
                               list_keys=LIST_KEYS, flip_ycoord=True,
                               linethick=3, fill_blocks=False, label_text=False,
-                              as_rectangles=False, n_per_edge=_N_PER_EDGE):
+                              warped_boxes=True, spacing=_POINT_SPACING):
     """
     The transform-aware counterpart of add_annotations_v1.
 
@@ -250,6 +283,7 @@ def add_annotations_transform(img, datas_plot, effects_by_phase, seed=None,
         clean_annotated  input with the stored boxes drawn on it
         aged             the aged page
         aged_annotated   aged page with the MOVED outlines drawn on it
+                         (warped outlines, or rectangles if warped_boxes=False)
         quads            [(label, [[x,y], ...]), ...] before
         quads_moved      the same after
         stale            labels whose outline could not be rebuilt
@@ -257,9 +291,9 @@ def add_annotations_transform(img, datas_plot, effects_by_phase, seed=None,
     quads = collect_quads(datas_plot, img.shape[0], keys=keys,
                           list_keys=list_keys, flip_ycoord=flip_ycoord)
     aged, moved, stale = age_with_quads(img, quads, effects_by_phase, seed=seed,
-                                        grayscale=grayscale, n_per_edge=n_per_edge)
+                                        grayscale=grayscale, spacing=spacing)
     kw = dict(linethick=linethick, fill_blocks=fill_blocks,
-              label_text=label_text, as_rectangles=as_rectangles)
+              label_text=label_text, warped_boxes=warped_boxes)
     return {'clean': img,
             'clean_annotated': draw_quads(img, quads, **kw),
             'aged': aged,
