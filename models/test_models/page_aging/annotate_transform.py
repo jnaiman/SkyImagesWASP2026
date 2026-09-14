@@ -2,33 +2,33 @@
 Annotation boxes that survive page aging.
 
 `add_annotations_v1` in `skyfigs/utils/figure_gen_utils/misc.py` draws the
-stored bounding boxes -- plot square, title, x/y labels, colorbar -- onto a
-clean figure.  It assumes the image it draws on is the image the coordinates
-came from, which stops being true the moment the page is aged: `Geometric`
-rotates and pads the canvas, so every stored box lands in the wrong place.
+stored bounding boxes -- plot square, title, x/y labels, tick labels, colorbar --
+onto a clean figure.  It assumes the image it draws on is the image the
+coordinates came from, which stops being true the moment the page is aged:
+`Geometric` rotates and pads the canvas, `Squish` deletes columns, `Folding`
+warps locally.  Every stored box then lands in the wrong place.
 
 `add_annotations_transform` below is that function reworked so the annotations
-are carried *through* the aging pipeline with the image.
+are carried *through* the aging pipeline with the image.  Three things had to be
+got right, each of them measured rather than assumed:
 
-Why corners rather than boxes
------------------------------
-Augraphy will transform either `bounding_boxes` or `keypoints` alongside the
-page, but they are not equally good here.  Measured on a 20 degree rotation of a
-300x200 box at (100,100):
+1.  **Corners, not boxes.**  Augraphy transforms `bounding_boxes` and
+    `keypoints` differently.  On a 20 degree rotation of a 300x200 box at
+    (100,100), the box came back *the same size, merely translated* -- augraphy
+    tracks the padding offset for boxes but not the rotation -- while the
+    corners came back genuinely rotated.  So annotations travel as keypoints.
 
-    box    before [100, 100, 400, 300]  after [129, 265, 429, 465]
-    corner before [[100,100],[400,100],[400,300],[100,300]]
-           after  [[129,265],[411,163],[479,351],[197,453]]
+2.  **One keypoint label per box.**  With every corner in a single label,
+    `Squish` silently dropped points and the surviving list no longer split
+    evenly into groups of four: one box absorbed another's corners and came out
+    as a nonsense quadrilateral.  A label per box keeps them separate.
 
-The box came back the same size, merely translated -- augraphy tracks the
-padding offset for boxes but not the rotation.  The corners came back genuinely
-rotated.  So this module hands augraphy the four corners of each box as
-keypoints and draws the resulting quadrilateral, which follows the page.
-`quad_to_aabb` is there if an axis-aligned rectangle is wanted instead.
-
-One gotcha: with `keypoints` or `bounding_boxes` supplied, the pipeline returns
-`[image, mask, keypoints, bounding_boxes]`, not a bare image.  Calling
-`np.asarray()` on that raises a confusing "inhomogeneous shape" ValueError.
+3.  **A dense perimeter, not four corners.**  `Squish` removes whole columns of
+    the page, taking any keypoint on them with it -- a box can lose an entire
+    edge, and four corners cannot survive that.  Each box is therefore sent as a
+    ring of points sampled along its perimeter, and the transformed outline is
+    rebuilt as the convex hull of whatever comes back.  This also tracks
+    `Folding`'s local warp far better than four corners could.
 """
 
 from copy import deepcopy
@@ -36,30 +36,53 @@ from copy import deepcopy
 import cv2
 import numpy as np
 
-# label -> BGR, following add_annotations_v1's colour list in spirit
+# label -> BGR
 BOX_COLORS = {
-    'square':    (0, 0, 255),
-    'title':     (255, 0, 0),
-    'xlabel':    (0, 200, 0),
-    'ylabel':    (255, 0, 255),
-    'color bar': (0, 165, 255),
+    'square':          (0, 0, 255),
+    'title':           (255, 0, 0),
+    'xlabel':          (0, 200, 0),
+    'ylabel':          (255, 0, 255),
+    'color bar':       (0, 165, 255),
+    'xticks':          (200, 200, 0),
+    'yticks':          (200, 100, 0),
+    'color bar ticks': (120, 120, 255),
 }
 
+# keys holding a single box dict
 BOX_KEYS = ('square', 'title', 'xlabel', 'ylabel', 'color bar')
+# keys holding a LIST of box dicts, one per tick label
+LIST_KEYS = ('xticks', 'yticks', 'color bar ticks')
 
-_KP_LABEL = 'annotation_corners'
+_KP_PREFIX = 'ann'
+_N_PER_EDGE = 8          # perimeter samples per edge, beyond the corners
 
 
-def collect_quads(datas_plot, img_height, keys=BOX_KEYS, flip_ycoord=True):
+def _box_to_quad(d, img_height, flip_ycoord):
+    x1, x2 = float(d['xmin']), float(d['xmax'])
+    if flip_ycoord:
+        y1, y2 = img_height - float(d['ymin']), img_height - float(d['ymax'])
+    else:
+        y1, y2 = float(d['ymin']), float(d['ymax'])
+    xa, xb = min(x1, x2), max(x1, x2)
+    ya, yb = min(y1, y2), max(y1, y2)
+    return [[int(round(xa)), int(round(ya))], [int(round(xb)), int(round(ya))],
+            [int(round(xb)), int(round(yb))], [int(round(xa)), int(round(yb))]]
+
+
+def collect_quads(datas_plot, img_height, keys=BOX_KEYS, list_keys=LIST_KEYS,
+                  flip_ycoord=True):
     """
-    Every stored annotation box as (label, quad), quad being its four corners
+    Every stored annotation box as (label, quad), quad being four corners
     [[x,y] x4] in image pixels, clockwise from top-left.
 
-    `datas_plot` is the generator's per-figure dict -- the structure
-    add_annotations_v1 walks, and the one embedded in each released
-    `<vqa_id>_qa.json`.  The stored coordinates use a bottom-left origin
-    (matplotlib display space) and the image a top-left one, so y is flipped
-    against the image height, exactly as the original function does.
+    Covers both the single boxes (square, title, x/y label, colorbar) and the
+    per-tick-label lists (xticks, yticks, colorbar ticks) -- the tick labels are
+    stored as a LIST of box dicts, which is why walking only dict-valued keys
+    misses them.
+
+    The stored coordinates use a bottom-left origin (matplotlib display space)
+    and the image a top-left one, so y is flipped against the image height,
+    exactly as add_annotations_v1 does.
     """
     out = []
     for pkey, v in datas_plot.items():
@@ -67,34 +90,101 @@ def collect_quads(datas_plot, img_height, keys=BOX_KEYS, flip_ycoord=True):
             continue
         for key in keys:
             d = v.get(key)
-            if not isinstance(d, dict) or 'xmin' not in d:
-                continue
-            x1, x2 = float(d['xmin']), float(d['xmax'])
-            if flip_ycoord:
-                y1, y2 = img_height - float(d['ymin']), img_height - float(d['ymax'])
-            else:
-                y1, y2 = float(d['ymin']), float(d['ymax'])
-            xa, xb = min(x1, x2), max(x1, x2)
-            ya, yb = min(y1, y2), max(y1, y2)
-            quad = [[xa, ya], [xb, ya], [xb, yb], [xa, yb]]
-            out.append((key, [[int(round(px)), int(round(py))] for px, py in quad]))
+            if isinstance(d, dict) and 'xmin' in d:
+                out.append((key, _box_to_quad(d, img_height, flip_ycoord)))
+        for key in list_keys:
+            for d in (v.get(key) or []):
+                if isinstance(d, dict) and 'xmin' in d:
+                    out.append((key, _box_to_quad(d, img_height, flip_ycoord)))
     return out
 
 
 def quad_to_aabb(quad):
-    """Axis-aligned [x1, y1, x2, y2] around a (possibly rotated) quad."""
+    """Axis-aligned [x1, y1, x2, y2] around a (possibly rotated) outline."""
     q = np.asarray(quad, dtype=float)
     return [int(q[:, 0].min()), int(q[:, 1].min()),
             int(q[:, 0].max()), int(q[:, 1].max())]
 
 
+def _perimeter_points(quad, n_per_edge=_N_PER_EDGE):
+    """A ring of points around `quad`, so the outline survives dropped points."""
+    q = np.asarray(quad, dtype=float)
+    pts = []
+    for i in range(len(q)):
+        a, b = q[i], q[(i + 1) % len(q)]
+        for t in np.linspace(0.0, 1.0, n_per_edge + 1)[:-1]:
+            pts.append(a + (b - a) * t)
+    return [[int(round(p[0])), int(round(p[1]))] for p in pts]
+
+
+def flatten_quads(labelled_quads, n_per_edge=_N_PER_EDGE):
+    """
+    (labels, keypoints_dict) ready to hand to AugraphyPipeline.
+
+    One label per box -- see note 2 in the module docstring -- each carrying a
+    perimeter ring rather than bare corners.
+    """
+    labels = [lab for lab, _ in labelled_quads]
+    keypoints = {'%s%d' % (_KP_PREFIX, i): _perimeter_points(q, n_per_edge)
+                 for i, (_, q) in enumerate(labelled_quads)}
+    return labels, keypoints
+
+
+def _outline(points, fallback):
+    """
+    Convex hull of the surviving points, as an outline to draw.
+
+    Squish can delete a whole edge's worth of points; with fewer than three
+    left there is nothing to rebuild from, so the original outline is returned
+    and the caller is told it is stale.
+    """
+    pts = np.asarray(points, dtype=np.int32)
+    if len(pts) < 3:
+        return [list(map(int, p)) for p in fallback], False
+    hull = cv2.convexHull(pts.reshape(-1, 1, 2)).reshape(-1, 2)
+    return [[int(x), int(y)] for x, y in hull], True
+
+
+def unpack_result(result, labels, keypoints_sent, grayscale=False):
+    """
+    Pull the aged image and the moved outlines out of a pipeline return value.
+
+    With keypoints or bounding_boxes supplied the pipeline returns
+    `[image, mask, keypoints, bounding_boxes]`; without them, a bare image.
+
+    Returns (aged_image, moved_labelled_quads, stale_labels) -- `stale_labels`
+    naming any box whose points were destroyed and whose outline is therefore
+    still the original one.
+    """
+    if isinstance(result, (list, tuple)):
+        aged = np.asarray(result[0])
+        moved_kp = result[2] or {}
+    else:
+        aged, moved_kp = np.asarray(result), {}
+
+    if aged.ndim == 2:
+        aged = cv2.cvtColor(aged, cv2.COLOR_GRAY2BGR)
+    if grayscale:
+        aged = cv2.cvtColor(cv2.cvtColor(aged, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
+
+    moved, stale = [], []
+    for i, label in enumerate(labels):
+        key = '%s%d' % (_KP_PREFIX, i)
+        sent = keypoints_sent[key]
+        got = moved_kp.get(key, sent)
+        outline, ok = _outline(got, sent)
+        if not ok:
+            stale.append(label)
+        moved.append((label, outline))
+    return aged, moved, stale
+
+
 def draw_quads(img, labelled_quads, linethick=3, fill_blocks=False,
                label_text=False, font_scale=1.0, as_rectangles=False):
-    """Draw each quad onto a copy of `img`, coloured by label."""
+    """Draw each outline onto a copy of `img`, coloured by label."""
     canvas = deepcopy(img)
     for label, quad in labelled_quads:
-        base = label.split()[-1] if label not in BOX_COLORS and ' ' in label else label
-        color = BOX_COLORS.get(label, BOX_COLORS.get(base, (0, 0, 255)))
+        color = BOX_COLORS.get(label, (0, 0, 255))
         if as_rectangles:
             x1, y1, x2, y2 = quad_to_aabb(quad)
             cv2.rectangle(canvas, (x1, y1), (x2, y2), color,
@@ -107,7 +197,7 @@ def draw_quads(img, labelled_quads, linethick=3, fill_blocks=False,
                 cv2.polylines(canvas, [pts], True, color, linethick, cv2.LINE_AA)
         if label_text:
             x, y = quad[0]
-            cv2.putText(canvas, base, (int(x), max(int(y) - 8, 14)),
+            cv2.putText(canvas, label, (int(x), max(int(y) - 8, 14)),
                         cv2.FONT_HERSHEY_SIMPLEX, font_scale, color, 2, cv2.LINE_AA)
     return canvas
 
@@ -120,70 +210,35 @@ def _factory(name):
     return getattr(ag, name)(p=1)
 
 
-def flatten_quads(labelled_quads):
-    """
-    (labels, keypoints_dict) ready to hand to AugraphyPipeline.
-
-    All corners go into one keypoint label in order, four per box, so they can
-    be regrouped afterwards without relying on dict ordering.
-    """
-    labels = [lab for lab, _ in labelled_quads]
-    flat = [list(map(int, pt)) for _, quad in labelled_quads for pt in quad]
-    return labels, {_KP_LABEL: flat}
-
-
-def unpack_result(result, labels, fallback_flat, grayscale=False):
-    """
-    Pull the aged image and the moved corners out of a pipeline return value.
-
-    With keypoints or bounding_boxes supplied the pipeline returns
-    `[image, mask, keypoints, bounding_boxes]`; without them, a bare image.
-    Handles both, so a caller does not have to care which it built.
-    """
-    if isinstance(result, (list, tuple)):
-        aged = np.asarray(result[0])
-        moved_flat = (result[2] or {}).get(_KP_LABEL, fallback_flat)
-    else:
-        aged, moved_flat = np.asarray(result), fallback_flat
-
-    if aged.ndim == 2:
-        aged = cv2.cvtColor(aged, cv2.COLOR_GRAY2BGR)
-    if grayscale:
-        aged = cv2.cvtColor(cv2.cvtColor(aged, cv2.COLOR_BGR2GRAY), cv2.COLOR_GRAY2BGR)
-
-    moved = [(labels[i], [list(map(int, pt)) for pt in moved_flat[4*i:4*i + 4]])
-             for i in range(len(labels))]
-    return aged, moved
-
-
 def age_with_quads(img, labelled_quads, effects_by_phase, seed=None,
-                   grayscale=False):
+                   grayscale=False, n_per_edge=_N_PER_EDGE):
     """
-    Age `img` and carry the annotation corners through the same transforms.
+    Age `img` and carry the annotation outlines through the same transforms.
 
     Builds its own pipeline from an explicit effect list.  If you already have a
     pipeline (a notebook preset, say), use flatten_quads() + unpack_result()
     instead so the preset stays the single source of truth.
 
-    Returns (aged_image, moved_labelled_quads).
+    Returns (aged_image, moved_labelled_quads, stale_labels).
     """
     from augraphy import AugraphyPipeline
 
-    labels, keypoints = flatten_quads(labelled_quads)
+    labels, keypoints = flatten_quads(labelled_quads, n_per_edge)
     pipeline = AugraphyPipeline(
         ink_phase=[_factory(n) for n in effects_by_phase.get('ink', [])],
         paper_phase=[_factory(n) for n in effects_by_phase.get('paper', [])],
         post_phase=[_factory(n) for n in effects_by_phase.get('post', [])],
         keypoints=keypoints,
         random_seed=seed)
-    return unpack_result(pipeline(img.copy()), labels,
-                         keypoints[_KP_LABEL], grayscale=grayscale)
+    return unpack_result(pipeline(img.copy()), labels, keypoints,
+                         grayscale=grayscale)
 
 
 def add_annotations_transform(img, datas_plot, effects_by_phase, seed=None,
-                              grayscale=False, keys=BOX_KEYS, flip_ycoord=True,
+                              grayscale=False, keys=BOX_KEYS,
+                              list_keys=LIST_KEYS, flip_ycoord=True,
                               linethick=3, fill_blocks=False, label_text=False,
-                              as_rectangles=False):
+                              as_rectangles=False, n_per_edge=_N_PER_EDGE):
     """
     The transform-aware counterpart of add_annotations_v1.
 
@@ -194,19 +249,19 @@ def add_annotations_transform(img, datas_plot, effects_by_phase, seed=None,
         clean            the input image
         clean_annotated  input with the stored boxes drawn on it
         aged             the aged page
-        aged_annotated   aged page with the MOVED boxes drawn on it
-        quads            [(label, [[x,y] x4]), ...] before
+        aged_annotated   aged page with the MOVED outlines drawn on it
+        quads            [(label, [[x,y], ...]), ...] before
         quads_moved      the same after
+        stale            labels whose outline could not be rebuilt
     """
     quads = collect_quads(datas_plot, img.shape[0], keys=keys,
-                          flip_ycoord=flip_ycoord)
-    aged, moved = age_with_quads(img, quads, effects_by_phase, seed=seed,
-                                 grayscale=grayscale)
+                          list_keys=list_keys, flip_ycoord=flip_ycoord)
+    aged, moved, stale = age_with_quads(img, quads, effects_by_phase, seed=seed,
+                                        grayscale=grayscale, n_per_edge=n_per_edge)
     kw = dict(linethick=linethick, fill_blocks=fill_blocks,
               label_text=label_text, as_rectangles=as_rectangles)
     return {'clean': img,
             'clean_annotated': draw_quads(img, quads, **kw),
             'aged': aged,
             'aged_annotated': draw_quads(aged, moved, **kw),
-            'quads': quads,
-            'quads_moved': moved}
+            'quads': quads, 'quads_moved': moved, 'stale': stale}
