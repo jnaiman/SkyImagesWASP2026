@@ -153,7 +153,7 @@ def q_contour_axis_limit(data, qa_pairs, plot_num=0, axis='x', which='minimum',
                                           use_list=False)
     # text_format = (text_format.rstrip('.') + ', read from the ' + axis +
     #                ' axis rather than from the data.')
-    text_format = (text_format.rstrip('.') + ', read from the ' + axis + '.' ) #+
+    text_format = (text_format.rstrip('.') + ', read from the ' + axis + ' axis.' ) #+
                    #' axis rather than from the data.')
     text_question = ('What is the ' + which + ' ' + axis + ' value covered by the ' +
                      axis + ' axis of this figure -- that is, the ' +
