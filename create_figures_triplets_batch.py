@@ -502,8 +502,12 @@ for sto, ifigure in parallel_objects(np.arange(_first, _last),
         pick = float(_ang_rng.choice(GMM_SIZE_POOL)) * 60.0      # arcmin -> arcsec
         pp = _deepcopy(figure_kwargs['plot_params'])
         centers = pp['image of the sky']['distribution']['gmm']['centers']
+        # a hair's width apart, not equal: the scale is drawn with
+        # scipy's loguniform.rvs(min, max), which raises "Domain error in
+        # arguments" when the two coincide.  1e-6 relative is far below any
+        # visible difference and keeps the draw effectively deterministic.
         centers['center_scale']['min'] = pick
-        centers['center_scale']['max'] = pick
+        centers['center_scale']['max'] = pick * (1.0 + 1e-6)
         this_kwargs = dict(figure_kwargs, plot_params=pp)
 
     try:

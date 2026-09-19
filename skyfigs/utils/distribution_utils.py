@@ -927,6 +927,13 @@ def get_images_survey(surveys_wl, object_id, save_img_dir, pdfname, missing_list
                 sub_surveys_wl = [rng.choice(sub_surveys_wl)]
             # get all images associated with this survey
             filenames = []
+            # bound up front: the loop below `continue`s when a (object, survey)
+            # pair is already known-missing, and the `del img_list` after the
+            # loop then raised "cannot access local variable 'img_list'".  The
+            # generator caught that, reset, and retried -- 15% of attempts in a
+            # 667-figure run were being spent on it.  Pre-dates the angular-size
+            # work; it just shows up clearly now that failures are being counted.
+            img_list = []
             for ss in sub_surveys_wl:
                 subdf = missing_list[(missing_list['object']==object_id) & (missing_list['survey']==ss) & (missing_list['pdf']==pdfname) ]
                 if len(subdf) > 0:
