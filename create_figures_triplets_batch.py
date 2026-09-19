@@ -155,6 +155,12 @@ parser.add_argument("-res_factor", nargs='?', type=float, default=50.0,
                          'surveys), the ceiling wins and the field is set to it.')
 parser.add_argument("-fov_factor", nargs='?', type=float, default=0.75,
                     help="upper bound = this fraction of the survey's default FOV")
+parser.add_argument("-max_field_arcmin", nargs='?', type=float, default=300.0,
+                    help='absolute ceiling on a field, in arcmin, whatever the '
+                         'survey could give.  300 (5 deg) keeps a cutout reading '
+                         'as an image of a region rather than an all-sky map; '
+                         'without it the all-sky radio maps ask for 225 deg. '
+                         'Takes priority over the resolution floor. 0 = no cap.')
 parser.add_argument("-object_size_factor", nargs='?', type=float, default=3.0,
                     help="field = this many times the object's SIMBAD major axis, "
                          'so the object sits inside the frame rather than filling it')
@@ -355,13 +361,15 @@ def field_size_arcmin(survey_name, object_id):
         if maj:
             size = args.object_size_factor * maj
             rng_ = angular_range_arcsec(SURVEY_SCALES, survey_name,
-                                        args.res_factor, args.fov_factor)
+                                        args.res_factor, args.fov_factor,
+                                        args.max_field_arcmin or None)
             if rng_:                      # keep it inside what the survey can give
                 size = min(max(size, rng_[0] / 60.0), rng_[1] / 60.0)
             return size
 
     rng_ = angular_range_arcsec(SURVEY_SCALES, survey_name,
-                                args.res_factor, args.fov_factor)
+                                args.res_factor, args.fov_factor,
+                                args.max_field_arcmin or None)
     if not rng_:
         return None
     lo, hi = rng_[0] / 60.0, rng_[1] / 60.0
@@ -423,12 +431,13 @@ if FAMILY == 'gmm':
 if FAMILY == 'real' and is_root():
     _known = sum(1 for s in SURVEY_SCALES
                  if angular_range_arcsec(SURVEY_SCALES, s, args.res_factor,
-                                         args.fov_factor))
+                                         args.fov_factor,
+                                         args.max_field_arcmin or None))
     print('angular-size policy: SIMBAD for %d objects, survey range for the rest'
           % len(SIMBAD_SIZES))
     print('  surveys with a usable range: %d of %d' % (_known, len(SURVEY_SCALES)))
-    print('  range = [%g x resolution, %g x default FOV]'
-          % (args.res_factor, args.fov_factor))
+    print('  range = [%g x resolution, %g x default FOV], capped at %g arcmin'
+          % (args.res_factor, args.fov_factor, args.max_field_arcmin))
 
 # hand the policy to the generator: get_sky_image_data reads it off plot_params
 if FAMILY == 'real':

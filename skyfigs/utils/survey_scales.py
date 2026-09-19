@@ -143,8 +143,15 @@ def lookup(scales, survey):
     return None
 
 
+# Absolute ceiling on a field, regardless of what the survey could give.
+# 5 degrees: beyond that a cutout stops reading as an image of a region and
+# starts reading as an all-sky map.  Without it the all-sky radio and microwave
+# surveys ask for fields up to 225 degrees across.
+MAX_FIELD_ARCMIN = 300.0
+
+
 def angular_range_arcsec(scales, survey, res_factor=50.0, fov_factor=0.75,
-                         on_conflict='clamp'):
+                         max_arcmin=MAX_FIELD_ARCMIN, on_conflict='clamp'):
     """
     (low, high) arcsec to draw a field size from for this survey.
 
@@ -157,12 +164,16 @@ def angular_range_arcsec(scales, survey, res_factor=50.0, fov_factor=0.75,
     hands back: at res_factor=50 that happens for 41 of 186 surveys (11 of the
     52 the dataset actually uses).  `on_conflict` decides what then:
 
-      'clamp' (default) -- collapse to (high, high).  The FOV ceiling wins, so
-                           the field stays bounded and as well resolved as the
+      'clamp' (default) -- collapse to (high, high).  The ceiling wins, so the
+                           field stays bounded and as well resolved as the
                            survey allows.  Returning None instead would hand
                            the choice back to SkyView, whose default is the
                            unbounded behaviour this policy exists to replace.
       'none'            -- return None and let the caller decide.
+
+    `max_arcmin` caps the high end absolutely, ahead of both other rules: a
+    survey whose beam is degrees across cannot show 50 beams inside a sensible
+    figure, and a coarse image is a better outcome than an all-sky one.
 
     Returns None when the survey is unknown or has no FOV, either way.
     """
@@ -171,6 +182,8 @@ def angular_range_arcsec(scales, survey, res_factor=50.0, fov_factor=0.75,
         return None
     lo = res_factor * s['resolution_arcsec']
     hi = fov_factor * s['fov_arcsec']
+    if max_arcmin:
+        hi = min(hi, float(max_arcmin) * 60.0)
     if hi <= 0:
         return None
     if lo >= hi:
