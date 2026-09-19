@@ -12523,3 +12523,28 @@ GSH 243-16+25,WENSS,1984ApJS___55__585H,no survey
 [O92] 250,SHASSA CC,1992AJ____104__590O,no survey
 [O92] 250,SHASSA C,1992AJ____104__590O,no survey
 [O92] 250,SHASSA Sm,1992AJ____104__590O,no survey
+V* EV Lac,Mellinger Red,1996ApJS__102__129B,exception
+V* EV Lac,Mellinger Green,1996ApJS__102__129B,exception
+V* EV Lac,Mellinger Blue,1996ApJS__102__129B,exception
+V* EV Lac,SHASSA H,1996ApJS__102__129B,no survey
+V* EV Lac,SHASSA CC,1996ApJS__102__129B,no survey
+V* EV Lac,SHASSA C,1996ApJS__102__129B,no survey
+V* EV Lac,SHASSA Sm,1996ApJS__102__129B,no survey
+LEDA  128476,IRAS  12 micron,1995ApJS___96___39B,no images
+LEDA  128476,IRAS  25 micron,1995ApJS___96___39B,no images
+LEDA  128476,IRAS  60 micron,1995ApJS___96___39B,no images
+LEDA  128476,IRAS 100 micron,1995ApJS___96___39B,no survey
+*  50 Per,Mellinger Red,1995ApJ___438__404H,exception
+*  50 Per,Mellinger Green,1995ApJ___438__404H,exception
+*  50 Per,Mellinger Blue,1995ApJ___438__404H,exception
+*  50 Per,SHASSA H,1995ApJ___438__404H,no survey
+*  50 Per,SHASSA CC,1995ApJ___438__404H,no survey
+*  50 Per,SHASSA C,1995ApJ___438__404H,no survey
+*  50 Per,SHASSA Sm,1995ApJ___438__404H,no survey
+2MASX J01382966-6617448,Mellinger Red,1995ApJS___96___39B,exception
+2MASX J01382966-6617448,Mellinger Green,1995ApJS___96___39B,exception
+2MASX J01382966-6617448,Mellinger Blue,1995ApJS___96___39B,exception
+2MASX J01382966-6617448,SHASSA H,1995ApJS___96___39B,no survey
+2MASX J01382966-6617448,SHASSA CC,1995ApJS___96___39B,no survey
+2MASX J01382966-6617448,SHASSA C,1995ApJS___96___39B,no survey
+2MASX J01382966-6617448,SHASSA Sm,1995ApJS___96___39B,no survey

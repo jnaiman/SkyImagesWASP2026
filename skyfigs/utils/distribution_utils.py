@@ -894,7 +894,22 @@ def get_images_survey(surveys_wl, object_id, save_img_dir, pdfname, missing_list
                       verbose=True, sleep_time = 2, overwrite = False, 
                       pick_random_survey = True, rng=np.random, 
                       height=300, width=300, debug=False, showProgress=False, 
-                      running_in_parallel=False, comm=None):
+                      running_in_parallel=False, comm=None,
+                      angular_size_arcmin=None):
+    """
+    angular_size_arcmin : ask SkyView for a field of this angular size instead of
+        letting it default.  height/width stay the PIXEL count -- SkyView takes
+        both, and returns `pixels` pixels covering `width` x `height` on the sky,
+        rescaling CDELT to suit.  Left as None, the survey's native pixel scale
+        decides the field, which is how the original dataset was built and why
+        its fields ranged from arcminutes to 136 degrees.
+
+        May also be a CALLABLE `f(survey_name, object_id) -> arcmin or None`.
+        The sub-survey is not known until inside the loop below -- the caller
+        only supplies a wavelength category -- so a policy that depends on the
+        survey's resolution or field of view has to be evaluated here rather
+        than passed in as a number.
+    """
     pdfs = []; objs = []; surveys = []; reasons = []
     err = False
     with warnings.catch_warnings():
@@ -918,8 +933,27 @@ def get_images_survey(surveys_wl, object_id, save_img_dir, pdfname, missing_list
                     if verbose: print('   missing, skipping:', ss)
                     continue
                 if verbose: print('    sub survey:', ss)
+                # resolve the policy now that the actual survey is known
+                if callable(angular_size_arcmin):
+                    try:
+                        _ang = angular_size_arcmin(str(ss), object_id)
+                    except Exception as _e:
+                        if verbose: print('      angular-size policy failed:', _e)
+                        _ang = None
+                else:
+                    _ang = angular_size_arcmin
+                if verbose and _ang:
+                    print('      requesting %.3f arcmin' % float(_ang))
                 try:
-                    img_list = SkyView.get_images(position=object_id, survey = ss, 
+                    if _ang:
+                        import astropy.units as _u
+                        _sz = float(_ang) * _u.arcmin
+                        img_list = SkyView.get_images(position=object_id, survey = ss,
+                                                pixels=(width,height),
+                                                width=_sz, height=_sz,
+                                                show_progress=showProgress)
+                    else:
+                        img_list = SkyView.get_images(position=object_id, survey = ss, 
                                                 pixels=(width,height), show_progress=showProgress)
                 except:
                     if verbose: print('      no survey for:', ss)
@@ -935,9 +969,14 @@ def get_images_survey(surveys_wl, object_id, save_img_dir, pdfname, missing_list
                     reasons.append('no images')
                 alreadyHave = False
                 for iimg, img in enumerate(img_list):
+                    # the angular size goes in the key: height/width are PIXELS, so
+                    # without it a 4' and a 40' cutout of the same object and
+                    # survey would collide on one filename and the second would
+                    # silently reuse the first
+                    _angtag = ('_ang%.4f' % float(_ang)) if _ang else ''
                     filename = 'image_' + pdfname + '_OBJ_' + object_id.replace(' ', '_').replace('/','-') + \
                                     '_SURVEY_' + str(ss).replace(' ','_').replace('/','-') + \
-                                    '_height' + str(height) + '_width' + str(width) + \
+                                    '_height' + str(height) + '_width' + str(width) + _angtag + \
                                         '_NUM_' + str(iimg).zfill(4) + '.fits'
                     filenames.append(filename)
                     if os.path.exists(save_img_dir + filename) and not overwrite:
@@ -1358,6 +1397,18 @@ def get_sky_image_data(plot_params,
         if k in imgOfSky.__dict__: # in there
             setattr(imgOfSky, k, v)
 
+    # Angular size for this cutout, if the caller set one.  Routed through
+    # plot_params rather than kwargs because plot_params is handed to this
+    # function directly, while kwargs are filtered against ImageOfSky's
+    # attributes further up.  A callable is given the survey name so the size
+    # can depend on it; see create_figures_triplets_batch.py.
+    _requested_angular_size = None
+    try:
+        _sky_params = plot_params['distribution']['sky']
+        _requested_angular_size = _sky_params.get('angular size arcmin')
+    except Exception:
+        pass
+
     # get sky images list
     if verbose and warning_verbose:
         print("[WARNING]: loading of sky images not optimized! (distribution_utils/get_sky_image_data)")
@@ -1496,7 +1547,8 @@ def get_sky_image_data(plot_params,
                             verbose=verbose_get_images, sleep_time = timer_pause, overwrite = overwrite, 
                             pick_random_survey = pick_random_survey, rng=rng, 
                             height=height, width=width, running_in_parallel=running_in_parallel, 
-                            comm=comm)
+                            comm=comm,
+                            angular_size_arcmin=_requested_angular_size)
                 # try different survey if no file
                 if filename is None:
                     survey = [survey_keys[isurvey]]
