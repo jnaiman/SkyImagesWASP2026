@@ -1,0 +1,8 @@
+object,survey,pdf,reason
+* del UMi,Mellinger Red,1950ApJ___111___65E,exception
+* del UMi,Mellinger Green,1950ApJ___111___65E,exception
+* del UMi,Mellinger Blue,1950ApJ___111___65E,exception
+* del UMi,SHASSA H,1950ApJ___111___65E,no survey
+* del UMi,SHASSA CC,1950ApJ___111___65E,no survey
+* del UMi,SHASSA C,1950ApJ___111___65E,no survey
+* del UMi,SHASSA Sm,1950ApJ___111___65E,no survey

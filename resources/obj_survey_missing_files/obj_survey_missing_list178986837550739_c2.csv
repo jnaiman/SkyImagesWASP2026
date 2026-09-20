@@ -1,0 +1,8 @@
+object,survey,pdf,reason
+RMC  31,Mellinger Red,1990ApJ___355__473W,exception
+RMC  31,Mellinger Green,1990ApJ___355__473W,exception
+RMC  31,Mellinger Blue,1990ApJ___355__473W,exception
+RMC  31,SHASSA H,1990ApJ___355__473W,no survey
+RMC  31,SHASSA CC,1990ApJ___355__473W,no survey
+RMC  31,SHASSA C,1990ApJ___355__473W,no survey
+RMC  31,SHASSA Sm,1990ApJ___355__473W,no survey
