@@ -506,7 +506,9 @@ def q_relationship_sky(data, qa_pairs, plot_num=0,
 
     nplots = get_nplots(data)
     # ask about the image as a whole -- along_an_axis=False, so no axis wording
+    # calc_clause=False: this asks for a judgement, not a calculation
     text_question, adder, text_format = what_is_relationship(big_tag, nplots=nplots,
+                                                             calc_clause=False,
                                                              val_type=val_type,
                                                              use_words=use_words,
                                                              along_an_axis=False,

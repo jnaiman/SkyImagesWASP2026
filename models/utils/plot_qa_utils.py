@@ -216,7 +216,7 @@ def how_much_data_values(big_tag, nplots=1, axis='x', val_type='a float',
 
 def what_is_relationship(big_tag, nplots=1, axis='x', val_type='a float', 
                          use_words=True, along_an_axis=False, 
-                         for_each='', use_list=False):
+                         for_each='', use_list=False, calc_clause=True):
     """
     axis : 'x', 'y', 'color' or 'x/y'/'x-y' -- if '/' or '-' assume along 2 axes.
     """
@@ -239,8 +239,15 @@ def what_is_relationship(big_tag, nplots=1, axis='x', val_type='a float',
     else:
         outputf = '""'
     # formatting for output
-    format = 'Please format the output as a json as {"'+big_tag+axis + '":'+outputf+'} '+panel_phrase(nplots, 'for')+', where the "'+big_tag+axis +'" value should be '+val_type+', calculated from the '
-    format += 'data values used to create the plot'+for_each+'.'
+    format = 'Please format the output as a json as {"'+big_tag+axis + '":'+outputf+'} '+panel_phrase(nplots, 'for')+', where the "'+big_tag+axis +'" value should be '+val_type
+    # calc_clause : the numeric questions genuinely are calculated from the
+    # data, so they keep the clause.  The sky provenance question is not a
+    # calculation -- it asks where the image came from -- and the phrasing
+    # pushed models toward reading it as being about the pixel distribution.
+    if calc_clause:
+        format += ', calculated from the data values used to create the plot'+for_each+'.'
+    else:
+        format += '.'
     return q, adder, format
 
 

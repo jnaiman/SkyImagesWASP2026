@@ -293,7 +293,9 @@ def q_relationship_contour(data, qa_pairs, plot_num = 0, axis='color',
     # get nplots    
     nplots = get_nplots(data)
     #adder = get_adder(nplots, use_words)
-    text_question, adder, text_format = what_is_relationship(big_tag, nplots=nplots, 
+    # calc_clause=False: this asks for a judgement, not a calculation
+    text_question, adder, text_format = what_is_relationship(big_tag, nplots=nplots,
+                                                             calc_clause=False, 
                                                               val_type=val_type, 
                                                               use_words=use_words, 
                                                               along_an_axis=along_an_axis,
