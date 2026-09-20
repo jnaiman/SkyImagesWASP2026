@@ -29,9 +29,14 @@
 #    used as a shortcut for the real-vs-synthetic question.  This is why the
 #    real family must be generated FIRST -- the gmm phase reads the real jsons.
 #
-# 3. Contours are copied, not regenerated.  Nothing about them changes, and
-#    re-rendering 667 of them costs hours.  -do_contour 1 regenerates them
-#    anyway; misc/copy_contours_to_triplets.py does the copy.
+# 3. Contours are copied, not regenerated -- EXCEPT the GMM ones.  The
+#    linear and random contours are untouched by anything here, so they are
+#    copied (misc/copy_contours_to_triplets.py).  The GMM contours share the
+#    'cluster std' policy with the synthetic skies, which changed to stop
+#    every GMM field looking alike (see get_gmm), so they are regenerated:
+#    delete just those figures and rerun with -do_contour 1 -contour_dist gmm.
+#    The already-have check skips the survivors, so only the freed slots are
+#    redrawn, and -contour_dist keeps them on the distribution they had.
 #
 # Index blocks, matching the published dataset:
 #   Picture_000001+   contour
@@ -143,6 +148,13 @@ parser.add_argument("-family", nargs='?', default='real',
                     choices=('real', 'gmm', 'contour'),
                     help='which family to generate.  Run "real" BEFORE "gmm": '
                          'the gmm fields are sized from the real ones.')
+parser.add_argument("-contour_dist", nargs='?', default=None,
+                    choices=('gmm', 'linear', 'random'),
+                    help='force every contour panel to this distribution.  Used '
+                         'to refill only the GMM contours after a morphology '
+                         'change: delete those figures, then regenerate with '
+                         '-contour_dist gmm so the freed slots come back as GMM '
+                         'rather than being re-drawn ~1/3 each.')
 parser.add_argument("-do_contour", nargs='?', type=int, default=0,
                     help='0 = refuse to generate contours (they are copied from '
                          'the previous run by misc/copy_contours_to_triplets.py). '
@@ -190,8 +202,8 @@ FAMILY = args.family
 
 if FAMILY == 'contour' and not args.do_contour:
     raise SystemExit(
-        'refusing to generate contours: they are unchanged by the new angular-size\n'
-        'policy and are copied from the previous run instead --\n'
+        'refusing to generate contours: the linear and random ones are unchanged\n'
+        'and are copied from the previous run instead --\n'
         '    python misc/copy_contours_to_triplets.py --src <old> --dst <new>\n'
         'pass -do_contour 1 to generate them anyway.')
 
@@ -443,6 +455,19 @@ if FAMILY == 'real' and is_root():
 if FAMILY == 'real':
     plot_params['image of the sky']['distribution']['sky']['angular size arcmin'] = \
         field_size_arcmin
+
+# Pin the contour distribution.  The three options carry prob 1 each, so a
+# plain rerun of freed slots would return only ~1/3 GMM and the family's
+# composition would drift; this keeps the regenerated figures on the
+# distribution they had.
+if args.contour_dist is not None:
+    _d = plot_params['contour']['distribution']
+    for _name in _d:
+        _d[_name]['prob'] = 1 if _name == args.contour_dist else 0
+    if is_root():
+        print('contour distribution pinned to %r: %s'
+              % (args.contour_dist,
+                 {k: v['prob'] for k, v in _d.items()}))
 
 # kwargs handed to make_random_plot; FigureRun keeps any of these that name one
 # of its attributes, and re-applies them every time it resets itself mid-figure

@@ -342,8 +342,25 @@ def get_gmm(xmin,xmax,ymin=0,ymax=1,zmin=0,zmax=1,
             nclusters1 = rng.integers(nclusters['min'],nclusters['max'])
     else: # same
         nclusters1 = nclusters['min']
+    # Per-field characteristic blob width (opt-in via the 'cluster std' dict).
+    #
+    # By default each cluster draws its own width from [min, max].  With a
+    # median of ~230 clusters that self-averages -- every field ends up with
+    # the same mixture of widths, so all GMM fields look alike.  Measured
+    # against the real sky family, GMM concentration (flux in the brightest 1%
+    # of pixels) spanned only 0.02-0.06 where real spanned 0.013-0.85, and no
+    # GMM field ever reached real's top decile.  Setting 'per field': True
+    # draws ONE width per field and scatters the clusters narrowly around it,
+    # so some fields come out diffuse and others point-source-like the way
+    # real cutouts do.
+    std_lo, std_hi = cluster_std['min'], cluster_std['max']
+    if isinstance(cluster_std, dict) and cluster_std.get('per field'):
+        _c = rng.uniform(std_lo, std_hi)
+        _s = cluster_std.get('scatter', 0.15)
+        std_lo, std_hi = _c - _s, _c + _s
+
     if ndims > 1:
-        cluster_std1 = rng.uniform(cluster_std['min'],cluster_std['max'], (nclusters1,ndims))
+        cluster_std1 = rng.uniform(std_lo, std_hi, (nclusters1,ndims))
         # power
         #print('power:', cluster_std1)
         cluster_std1 = np.power(10,cluster_std1)
@@ -351,7 +368,7 @@ def get_gmm(xmin,xmax,ymin=0,ymax=1,zmin=0,zmax=1,
         #cluster_std1 *= (xmax-xmin)
     else:
         #print('ding ding!')
-        cluster_std1 = rng.uniform(cluster_std['min'],cluster_std['max'], nclusters1)
+        cluster_std1 = rng.uniform(std_lo, std_hi, nclusters1)
         cluster_std1 = np.power(10,cluster_std1)
         cluster_std1 *= (xmax-xmin)
 
@@ -810,6 +827,15 @@ from astropy.utils.data import get_pkg_data_filename
 import pandas as pd
 
 # best guesses for how surveys match up with wavelength tags
+# Surveys never drawn from, by their SkyView survey_dict name.
+#
+# TESS: a third of its cutouts are unusable.  SkyView's TESS coverage is
+# patchy, and a miss comes back as 100% NaN rather than as an error; the ones
+# that do carry data have a handful of saturated pixels that stretch a linear
+# colormap until the whole field renders as one flat colour.  Measured over the
+# first 432 real panels: 48 TESS, of which 6 blank and 10 flat.
+EXCLUDED_SURVEYS = {'TESS'}
+
 surveys_by_wl = {'O':['Optical:SDSS', 'OtherOptical', 'Optical:DSS class=', 'Allbands:GOODS/HDF/CDF'], 
                  # repeat IR for other far ir/near ir/etc
                  'I':['IR:IRAS', 'IR:2MASS class=', 'IR:UKIDSS class=', 'IR:WISE class=', 'IR:AKARI class=', 'IR:Planck', 'IR:WMAP&COBE'], 
@@ -923,7 +949,15 @@ def get_images_survey(surveys_wl, object_id, save_img_dir, pdfname, missing_list
                     print(str(e))
                     print('survey tried:', s)
                 return None, err
-            if pick_random_survey:
+            # Drop excluded surveys BEFORE the random pick, so the pick
+            # chooses among usable surveys instead of landing on one that is
+            # then thrown away.  An empty list simply skips the loop below and
+            # falls through to the caller's "try the next survey" path -- no
+            # `continue` here, which would leave `filenames` unbound.
+            if EXCLUDED_SURVEYS:
+                sub_surveys_wl = [x for x in sub_surveys_wl
+                                  if x not in EXCLUDED_SURVEYS]
+            if pick_random_survey and len(sub_surveys_wl) > 0:
                 sub_surveys_wl = [rng.choice(sub_surveys_wl)]
             # get all images associated with this survey
             filenames = []
@@ -1562,6 +1596,7 @@ def get_sky_image_data(plot_params,
                     isurvey += 1
 
         # try to open
+        _degenerate = False      # raw cutout carries no usable signal
         if filename is not None:
             try:
                 if verbose:
@@ -1573,6 +1608,15 @@ def get_sky_image_data(plot_params,
                     #hdu = fits.open(ff, output_verify='fix', verify='fix')[0]
                     wcs = WCS(hdu.header)
                     img_data = hdu.data
+                    # Judge emptiness on the RAW data, before nan_to_num.  The
+                    # all-NaN guard below used to run after it, by which point
+                    # every NaN was already 0.0 -- so it could never fire and a
+                    # blank cutout sailed through as a solid-zero image.  TESS
+                    # is the usual source: its SkyView coverage is patchy, and
+                    # a miss comes back 100% NaN rather than as an error.
+                    _raw = np.asarray(img_data, dtype=float)
+                    _fin = _raw[np.isfinite(_raw)]
+                    _degenerate = (_fin.size == 0) or (np.unique(_fin).size <= 1)
                     # apply some "fixes" for large images/out of bounds data
                     img_data = np.nan_to_num(img_data, nan=0.0, posinf=0.0, neginf=0.0)
                     # downsample if need to
@@ -1586,11 +1630,13 @@ def get_sky_image_data(plot_params,
                     print('[ERROR]: Issue opening fits file - ', str(e))
                 filename = None
 
-        # also check if only NaN's
+        # also check if only NaN's (or a single constant value -- same thing
+        # once it is drawn).  Setting filename back to None sends the caller
+        # round its `while filename is None` loop to try the next survey.
         if filename is not None:
-            if len(img_data[~np.isnan(img_data)]) == 0:
+            if _degenerate:
                 if verbose:
-                    print('[WARNING]: img_data is all NaNs for file:', filename)
+                    print('[WARNING]: blank cutout (all NaN or constant):', filename)
                 filename = None
 
     # Match the sampled (nx, ny) grid so real cutouts and GMM skies share one

@@ -219,7 +219,7 @@ plot_types_params = {
                                  'nclusters':{'min':1, 'max':500},
                                  #'nsamples':{'min':10, 'max':500},
                                  'upsample factor log':{'min':0, 'max':0.5}, # upsample number of points, 10^X (was 2, 6)
-                                 'cluster std':{'min':-1, 'max':1.5}, # in terms of factors of the x/y ranges
+                                 'cluster std':{'min':-2.8, 'max':-1.0, 'per field':True, 'scatter':0.15}, # log10 factors of the x/y ranges -- per-field width, tuned to match the real-sky morphology; see get_gmm
                                  'noise':{'min':0.05,'max':0.25}, # for noise in distribution and color when applicable
                                  'color noise prob': 0.5 # gmm relationship between x/y and color?
                              }, # end gmm for contour plots 
@@ -275,7 +275,7 @@ plot_types_params = {
                                  'prob':1, 
                                  'nclusters':{'min':1, 'max':500},
                                  'upsample factor log':{'min':0, 'max':0.5}, # upsample number of points, 10^X (was 2, 6)
-                                 'cluster std':{'min':-1, 'max':1.5}, # in terms of factors of the x/y ranges
+                                 'cluster std':{'min':-2.8, 'max':-1.0, 'per field':True, 'scatter':0.15}, # log10 factors of the x/y ranges -- per-field width, tuned to match the real-sky morphology; see get_gmm
                                  'noise':{'min':0.05,'max':0.25}, # for noise in distribution and color when applicable
                                  'color noise prob': 0.5, # gmm relationship between x/y and color?
                                  'centers':{ # use random center and scale for gmm (and maybe sky images -- JPN would need to implement)
