@@ -363,6 +363,32 @@ def get_image_of_the_sky_data(plot_params, distribution = 'random',
                         cmax=dirminsmaxs['cmax'], 
                         rng=rng, function=rng.uniform) 
 
+        # Put the colour scale on the same footing as a real cutout's.
+        #
+        # A synthetic sky had no reason to carry physical units, so its colour
+        # range came out wherever the generator left it: 53% of panels had a
+        # NEGATIVE minimum against 5% of real ones (real panels are fluxes or
+        # counts), and a few spanned up to 1e21.  Either is a giveaway for the
+        # "real or gaussian mixture?" question that has nothing to do with what
+        # the image shows -- a colourbar reading -2e8 answers it on its own.
+        #
+        # `colour range` is a (min, max) pair drawn per figure from the ranges
+        # the REAL family actually produced, injected by the batch script the
+        # same way `center_scale` is for field size.  The remap is affine, so
+        # it changes only the numbers on the colourbar, not the structure of
+        # the image or any spatial statistic computed from it.
+        _crange = plot_params['distribution'][distribution].get('colour range')
+        if _crange is not None:
+            _lo, _hi = float(_crange[0]), float(_crange[1])
+            _c = np.asarray(colors, dtype=float)
+            _fin = _c[np.isfinite(_c)]
+            if _fin.size and _hi > _lo:
+                _vmin, _vmax = float(_fin.min()), float(_fin.max())
+                if _vmax > _vmin:
+                    colors = (_c - _vmin) / (_vmax - _vmin) * (_hi - _lo) + _lo
+                else:                      # degenerate: flat field
+                    colors = np.full_like(_c, _lo)
+
         if verbose and warning_verbose:
             print('[WARNING]: RA/DEC both in deg')
 

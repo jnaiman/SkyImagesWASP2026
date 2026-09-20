@@ -57,8 +57,16 @@
 #   imgs/Picture_NNNNNN.jpeg / jsons/ / pickles/ / diags/
 
 import argparse
+import faulthandler
 import os
 import sys
+
+# A rank occasionally segfaults inside the plotting stack, and mpirun then
+# aborts the whole job.  SIGSEGV cannot be caught and recovered from in Python,
+# but faulthandler makes the dying rank print a traceback to stderr (and so to
+# the stage log), which is the only way to find out WHERE it died instead of
+# just retrying around it.
+faulthandler.enable()
 
 # this script lives one level down, so put the repo root on the path for
 # `skyfigs` and the bundled `yt` shim
@@ -182,6 +190,10 @@ parser.add_argument("-simbad_sizes", nargs='?', default=None,
                     help='default: <repo>/resources/simbad_object_sizes.csv')
 parser.add_argument("-survey_meta", nargs='?', default=None,
                     help='default: <repo>/resources/skyview_survey_metadata.csv')
+parser.add_argument("-gmm_colors_from", nargs='?', default=None,
+                    help='directory of REAL figure jsons to draw gmm colour '
+                         'ranges from.  Default: <save_dir>/jsons/.  Pass "none" '
+                         'to leave gmm colour scales uncalibrated.')
 parser.add_argument("-gmm_sizes_from", nargs='?', default=None,
                     help='directory of already-generated REAL jsons to take the '
                          'gmm field sizes from.  Default: <save_dir>/jsons/')
@@ -425,7 +437,45 @@ def realised_real_sizes(jsons_dir):
     return sizes
 
 
+def realised_real_colors(jsons_dir):
+    """
+    (min, max) colour pairs from every real figure on disk.
+
+    Pairs are kept TOGETHER rather than fitting the two marginals separately:
+    a real panel's minimum and its span are strongly related (a wide-span
+    infrared field does not have the same floor as a narrow-span radio one),
+    and sampling them independently would manufacture combinations that no
+    real cutout produced.
+    """
+    out = []
+    for f in sorted(_glob.glob(os.path.join(jsons_dir, 'Picture_2*.json'))):
+        try:
+            d = _json.load(open(f))
+            d = _json.loads(d) if isinstance(d, str) else d
+            c = np.asarray(d['plot0']['data']['colors'], dtype=float)
+        except Exception:
+            continue
+        v = c[np.isfinite(c)]
+        if v.size and v.max() > v.min():
+            out.append((float(v.min()), float(v.max())))
+    return out
+
+
+GMM_COLOR_POOL = []
 GMM_SIZE_POOL = []
+if FAMILY == 'gmm' and (args.gmm_colors_from or '').lower() != 'none':
+    _csrc = args.gmm_colors_from or os.path.join(fake_figs_dir, 'jsons')
+    GMM_COLOR_POOL = realised_real_colors(os.path.expanduser(_csrc))
+    if is_root():
+        if GMM_COLOR_POOL:
+            _neg = sum(1 for lo, _ in GMM_COLOR_POOL if lo < 0)
+            print('gmm colour ranges drawn from %d real figures '
+                  '(%.0f%% with a negative minimum)'
+                  % (len(GMM_COLOR_POOL), 100.0 * _neg / len(GMM_COLOR_POOL)))
+        else:
+            print('[WARN] no real figures found in %s -- gmm colour scales '
+                  'will be left uncalibrated' % _csrc)
+
 if FAMILY == 'gmm':
     _src = args.gmm_sizes_from or os.path.join(fake_figs_dir, 'jsons')
     GMM_SIZE_POOL = realised_real_sizes(os.path.expanduser(_src))
@@ -535,6 +585,18 @@ for sto, ifigure in parallel_objects(np.arange(_first, _last),
         centers['center_scale']['max'] = pick * (1.0 + 1e-6)
         this_kwargs = dict(figure_kwargs, plot_params=pp)
 
+    # A colour range from the real family, one draw per figure.  Kept as a
+    # (min, max) PAIR so the floor and the span stay consistent with each
+    # other; data_utils applies it as an affine remap after generation, so it
+    # moves the colourbar numbers without touching the image structure.
+    if FAMILY == 'gmm' and GMM_COLOR_POOL:
+        if this_kwargs is figure_kwargs:            # no size draw above
+            pp = _deepcopy(figure_kwargs['plot_params'])
+            this_kwargs = dict(figure_kwargs, plot_params=pp)
+        _lo, _hi = GMM_COLOR_POOL[_ang_rng.integers(len(GMM_COLOR_POOL))]
+        this_kwargs['plot_params']['image of the sky']['distribution']['gmm'][
+            'colour range'] = (_lo, _hi)
+
     try:
         diagsout = make_random_plot(fake_figs_dir=fake_figs_dir,
                                     ifigure=ifigure,
@@ -563,3 +625,21 @@ if is_root():
     print('figures in:', fake_figs_dir + 'imgs/')
     print('index range: Picture_%s .. Picture_%s'
           % (str(_first + 1).zfill(6), str(_last).zfill(6)))
+
+    # Exit status has to say whether the run actually finished.  Previously this
+    # script returned 0 whether it produced every figure or died a third of the
+    # way through -- a rank segfaulting takes the whole mpirun down, and the
+    # driver, seeing a clean return, moved on to the next stage.  That is how a
+    # contour stage that stopped at 622/667 was treated as complete.
+    #
+    # Count what is actually on disk in this run's index range, using the same
+    # both-files test as already_have(), and fail loudly if any are missing.
+    complete = sum(1 for i in range(_first, _last) if already_have(i))
+    missing = args.number_of_figures - complete
+    if missing > 0:
+        print('[INCOMPLETE]: %d of %d figures are missing from this index range.'
+              % (missing, args.number_of_figures))
+        print('              Re-run with the same arguments to fill the gaps; '
+              'already_have() skips what exists.')
+        sys.exit(1)
+    print('[COMPLETE]: all %d figures present.' % args.number_of_figures)
