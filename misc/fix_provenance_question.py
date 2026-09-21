@@ -38,6 +38,7 @@ Nothing is written without --apply.  The rerun step backs up each pickle to
 """
 
 import argparse
+import ast
 import glob
 import json
 import os
@@ -205,24 +206,50 @@ def _load_sender(model_dir):
     nb = json.load(open(nb_path))
     cells = [''.join(c['source']) for c in nb['cells'] if c['cell_type'] == 'code']
 
+    fn_name = {'chatgpt_api': 'send_to_chatgpt', 'gemini': 'send_to_gemini',
+               'claude_haiku': 'send_to_claude'}[model_dir]
+
     g = {'__name__': '__main__'}
     cwd = os.getcwd()
     os.chdir(os.path.join(REPO, 'models', 'test_models'))
     try:
+        # Run the setup cells, SKIPPING any that would start asking questions,
+        # and stop as soon as the sender and the client both exist.
+        #
+        # Not "stop at the first run loop": the three notebooks are laid out
+        # differently, and in two of them a run loop sits BETWEEN the client
+        # cell and the sender definition (gemini client@3 loop@5 sender@6;
+        # claude client@3 loop@4 sender@5).  Halting at the first loop leaves
+        # the sender undefined.
         for src in cells:
-            # the setup cells: imports, key file, client, and the sender itself.
-            # Stop before anything that would start asking questions.
-            if 'for ' in src and 'jsons_to_parse' in src:
+            if fn_name in g and 'client' in g:
                 break
             try:
-                exec(compile(src, '<nb>', 'exec'), g)
+                node = ast.parse(src)
+            except SyntaxError:
+                continue
+            # Keep only DECLARATIVE statements -- imports, assignments, defs,
+            # and the with/try blocks that read the key file.  Bare expression
+            # statements and loops are dropped.
+            #
+            # This matters: the cell that defines the sender also CALLS it at
+            # the bottom as a smoke test, so simply exec'ing the cell fires a
+            # real API request just to get the function.  Filtering the tree
+            # gets the definition without the side effect, and is robust to
+            # the three notebooks laying their cells out differently.
+            keep = (ast.Import, ast.ImportFrom, ast.Assign, ast.AnnAssign,
+                    ast.AugAssign, ast.FunctionDef, ast.AsyncFunctionDef,
+                    ast.ClassDef, ast.With, ast.Try, ast.If)
+            node.body = [n for n in node.body if isinstance(n, keep)]
+            if not node.body:
+                continue
+            try:
+                exec(compile(node, '<nb>', 'exec'), g)
             except Exception as e:
-                print('     [warn] setup cell skipped (%s)' % type(e).__name__)
+                print('     [warn] setup cell skipped (%s: %s)'
+                      % (type(e).__name__, str(e)[:60]))
     finally:
         os.chdir(cwd)
-
-    fn_name = {'chatgpt_api': 'send_to_chatgpt', 'gemini': 'send_to_gemini',
-               'claude_haiku': 'send_to_claude'}[model_dir]
     if fn_name not in g or 'client' not in g:
         raise RuntimeError('could not load %s / client from %s' % (fn_name, nb_name))
     return g[fn_name], g['client'], g
@@ -306,18 +333,55 @@ def step_rerun(apply, runs, models, limit=None, sleep=0.0):
 
 
 def _ask(send, mdir, entry, client, img_path, g):
-    """Call the notebook's sender with a single question."""
+    """
+    Call the notebook's sender for one question, with THAT notebook's settings
+    rather than the function defaults.
+
+    The defaults are not what the runs used, and the gap is not cosmetic:
+    send_to_claude defaults to max_tokens=1000 with thinking on at 8000 budget
+    tokens, which the API rejects outright ("max_tokens must be greater than
+    thinking.budget_tokens").  The notebook sets max_tokens=2000 and
+    thinking=False.  Reading the values out of the notebook namespace `g` keeps
+    the re-ask on the same settings as the answers it replaces, and means a
+    later change in the notebook carries over here rather than silently
+    diverging.
+    """
     from utils.llm_utils import load_image
     ql = {k: entry.get(k, '') for k in ('persona', 'context', 'question', 'format')}
     reasoning = entry.get('reasoning')
+
+    def cfg(name, default):
+        v = g.get(name, default)
+        return default if v is None else v
+
     if mdir == 'gemini':
-        r = send(ql, img_path, client, test_run=False, verbose=False, reasoning=reasoning)
+        r = send(ql, img_path, client,
+                 test_run=False, verbose=False,
+                 img_format=cfg('img_format', 'jpeg'),
+                 system_prompt=g.get('system_prompt'),
+                 config=g.get('config'),
+                 model_name=cfg('model_name', 'gemini-3.5-flash-lite'),
+                 thinking_level=g.get('thinking_level'),
+                 reasoning=reasoning)
     else:
-        enc = load_image(img_path, img_format='jpeg')
+        img_fmt = cfg('img_format_media', cfg('img_format', 'jpeg'))
+        enc = load_image(img_path, img_format=img_fmt)
         if isinstance(enc, tuple):
             enc = enc[0]
-        r = send(ql, client, img_path, enc, test_run=False, verbose=False,
-                 img_format='jpeg', reasoning=reasoning)
+        kw = dict(test_run=False, verbose=False, img_format=img_fmt,
+                  reasoning=reasoning)
+        if mdir == 'claude_haiku':
+            kw.update(model=cfg('model', 'claude-haiku-4-5'),
+                      max_tokens=cfg('max_tokens', 2000),
+                      temperature=cfg('temperature', 0.1),
+                      thinking=cfg('thinking', False),
+                      system_prompt=g.get('system_prompt'))
+        else:
+            kw.update(model=cfg('model', 'gpt-5.4-nano-2026-03-17'),
+                      temperature=cfg('temperature', 1.0),
+                      reasoning_level=g.get('reasoning_level'),
+                      verbosity=g.get('verbosity'))
+        r = send(ql, client, img_path, enc, **kw)
     if isinstance(r, (list, tuple)):
         r = r[0]
     return r
