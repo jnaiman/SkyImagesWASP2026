@@ -301,3 +301,16 @@ ArXiv mining (`arxiv_mining_synthetic_data/`), figure injection into paper pages
 `rectangle_finding_utils.py`), all OCR engines (`ocr_helpers.py`,
 `extra_ocr_helpers.py`, `{rapidocr,doctr,easyocr,kraken,chandra}_helpers.py`),
 and the notebooks.
+
+---
+
+## License
+
+[Apache License 2.0](LICENSE) — the same license the generated VQA dataset is
+released under.
+
+Note the scope: this covers the code in this repo. The plotting machinery
+ported from `~/ArXiv_figure_injection` (see "Deliberately not copied" above)
+carries whatever license that project does, and the survey cutouts the sky
+figures are drawn from are governed by the terms of the archives they came
+from, not by this license.
