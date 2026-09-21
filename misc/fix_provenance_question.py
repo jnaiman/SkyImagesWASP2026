@@ -255,7 +255,7 @@ def _load_sender(model_dir):
     return g[fn_name], g['client'], g
 
 
-def step_rerun(apply, runs, models, limit=None, sleep=0.0):
+def step_rerun(apply, runs, models, limit=None, sleep=0.0, ids=None):
     from utils.llm_utils import load_image
     total_new = 0
     for run in runs:
@@ -273,6 +273,10 @@ def step_rerun(apply, runs, models, limit=None, sleep=0.0):
                 qa = payload[0] if isinstance(payload, (list, tuple)) else payload
                 if any(_is_distribution_q(e) for e in qa):
                     targets.append(fp)
+            if ids:
+                want = set(ids)
+                targets = [t for t in targets
+                           if os.path.basename(t).removesuffix('_qa.pickle') in want]
             if limit:
                 targets = targets[:limit]
             print('  %-14s %-13s %d figures carry the question'
@@ -396,6 +400,10 @@ def main():
     ap.add_argument('--models', default='chatgpt_api,gemini,claude_haiku')
     ap.add_argument('--limit', type=int, default=0,
                     help='only this many figures per model -- for a trial run')
+    ap.add_argument('--ids', default=None,
+                    help='comma-separated vqa ids to restrict to, e.g. for a '
+                         'trial that deliberately covers one real sky and one '
+                         'synthetic sky rather than whatever sorts first')
     ap.add_argument('--sleep', type=float, default=0.0)
     ap.add_argument('--apply', action='store_true')
     a = ap.parse_args()
@@ -415,7 +423,8 @@ def main():
         elif s == 'jsons':
             step_jsons(a.apply)
         else:
-            step_rerun(a.apply, runs, models, a.limit or None, a.sleep)
+            step_rerun(a.apply, runs, models, a.limit or None, a.sleep,
+                       ids=[i.strip() for i in a.ids.split(',')] if a.ids else None)
         print()
     if not a.apply:
         print('DRY RUN -- nothing written.  Re-run with --apply.')
