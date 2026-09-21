@@ -316,16 +316,22 @@ def step_rerun(apply, runs, models, limit=None, sleep=0.0, ids=None):
                               % (e.get('question') or '')[:60])
                         continue
                     e['format'] = nf
+                    # The senders take the question dict and WRITE the answer
+                    # back into it ('Response', 'raw answer', 'Response String',
+                    # 'usage', ...), returning that same dict rather than a
+                    # response string.  So hand them the entry itself and let
+                    # them fill it in -- constructing a fresh dict and storing
+                    # the return value writes the QUESTION back as the answer.
+                    before = e.get('raw answer')
                     try:
-                        out = _ask(send, mdir, e, client, img, g)
+                        _ask(send, mdir, e, client, img, g)
                     except Exception as ex:
                         print('     [warn] %s failed: %s' % (vqa_id, ex)); continue
-                    if out is not None:
-                        e['Response'] = out
-                        e['raw answer'] = out
-                        e['Response String'] = out
+                    if e.get('raw answer') is not None and e.get('raw answer') != before:
                         e['reasked'] = True
                         total_new += 1
+                    else:
+                        print('     [warn] %s: answer unchanged, not marking' % vqa_id)
                 with open(fp, 'wb') as fh:
                     pickle.dump(payload, fh)
                 if n % 10 == 0:
@@ -351,7 +357,7 @@ def _ask(send, mdir, entry, client, img_path, g):
     diverging.
     """
     from utils.llm_utils import load_image
-    ql = {k: entry.get(k, '') for k in ('persona', 'context', 'question', 'format')}
+    ql = entry          # mutated in place by the sender; see the caller
     reasoning = entry.get('reasoning')
 
     def cfg(name, default):
@@ -386,8 +392,6 @@ def _ask(send, mdir, entry, client, img_path, g):
                       reasoning_level=g.get('reasoning_level'),
                       verbosity=g.get('verbosity'))
         r = send(ql, client, img_path, enc, **kw)
-    if isinstance(r, (list, tuple)):
-        r = r[0]
     return r
 
 
