@@ -32,3 +32,4 @@ dependencies:
   - pip
   - pip:
       - TexSoup>=0.3.1     # parsing the mined inline-math fragments
+      - google-genai>=2.0  # `from google import genai`, for the Gemini model notebooks
