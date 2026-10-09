@@ -50,7 +50,7 @@
    "source": [
     "# ============================ CONFIG ============================\n",
     "# Where the test-run pickles live: one subdirectory per model.\n",
-    "out_base  = '~/astro_sky_image_vqa/LMM_outputs_n255/'\n",
+    "out_base  = '~/astro_sky_image_vqa/LMM_outputs_n150/'\n",
     "\n",
     "# One .docx per model lands here.\n",
     "# docs_dir  = out_base + 'qa_word_docs/'\n",

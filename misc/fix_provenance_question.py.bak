@@ -52,8 +52,8 @@ sys.path.insert(0, os.path.join(REPO, 'models'))
 
 VQA_JSONS = os.path.expanduser('~/astro_sky_image_vqa/VQA_full/qa_jsons/')
 RUN_DIRS = {
-    'original':      os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n255/'),
-    'archive_light': os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n255_archive_light/'),
+    'original':      os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n150/'),
+    'archive_light': os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n150_archive_light/'),
     'archive':       os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n150_archive/'),
 }
 # The image each run actually sent.  The aged runs keep their degraded copies
@@ -62,7 +62,7 @@ RUN_DIRS = {
 # that run saw.
 IMG_DIRS = {
     'original':      os.path.expanduser('~/astro_sky_image_vqa/VQA_full/imgs/'),
-    'archive_light': os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n255_archive_light/aged_imgs/'),
+    'archive_light': os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n150_archive_light/aged_imgs/'),
     'archive':       os.path.expanduser('~/astro_sky_image_vqa/LMM_outputs_n150_archive/aged_imgs/'),
 }
 

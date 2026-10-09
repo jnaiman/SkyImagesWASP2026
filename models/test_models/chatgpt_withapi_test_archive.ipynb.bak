@@ -51,7 +51,7 @@
     "# pinning the snapshot keeps the run reproducible.\n",
     "out_base = '~/astro_sky_image_vqa/LMM_outputs_n150_archive/'   # ARCHIVE-AGED images\n",
     "\n",
-    "# out_base = '~/astro_sky_image_vqa/LMM_outputs_n255/' #small\n",
+    "# out_base = '~/astro_sky_image_vqa/LMM_outputs_n150/' #small\n",
     "\n",
     "dir_api = out_base + 'chatgpt_api/'    # low tier\n",
     "model = \"gpt-5.4-nano-2026-03-17\"\n",
