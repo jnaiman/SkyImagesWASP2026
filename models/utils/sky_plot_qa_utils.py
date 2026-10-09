@@ -613,17 +613,31 @@ def field_extent(data, plot_num=0, verbose=False):
 
 def pixel_scale_arcsec(data, plot_num=0, verbose=False):
     """
-    Approximate arcsec per image pixel, from the declination extent divided by
-    the number of rows.  Uses the vertical axis so no cos(dec) factor is
-    involved.  None when RA/DEC can't be derived.
+    Approximate arcsec per data pixel, from the declination extent divided by
+    the number of pixel steps that extent spans.  Uses the vertical axis so no
+    cos(dec) factor is involved.  None when RA/DEC can't be derived.
+
+    The divisor must describe the SAME rows as field_extent's height, which is
+    measured over the DISPLAYED box only -- the real-sky path zooms into
+    50-100% of the cutout.  Dividing by the full array height (as an earlier
+    version did) understated the pixel scale by the zoom fraction, a median
+    factor of 0.77 on the real-sky panels.  The height runs from the first to
+    the last displayed pixel centre (gmm: ys.min() to ys.max()), so it spans
+    y1 - y0 steps, not y1 - y0 + 1.
     """
     _, h_arcmin = field_extent(data, plot_num=plot_num, verbose=verbose)
     if h_arcmin is None:
         return None
-    colors = np.asarray(data['plot' + str(plot_num)]['data']['colors'])
+    pdata = data['plot' + str(plot_num)]
+    colors = np.asarray(pdata['data']['colors'])
     if colors.ndim != 2 or colors.shape[0] == 0:
         return None
-    return float(h_arcmin * 60.0 / colors.shape[0])
+    ny, nx = colors.shape
+    _, (y0, y1) = _displayed_pixel_limits(pdata, nx, ny)
+    nsteps = abs(float(y1) - float(y0))
+    if nsteps <= 0:
+        return None
+    return float(h_arcmin * 60.0 / nsteps)
 
 
 def _panel(data, lead='in'):
