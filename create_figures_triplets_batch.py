@@ -364,7 +364,18 @@ if args.use_simbad_sizes and os.path.exists(_simbad_csv):
             if _maj > 0:
                 SIMBAD_SIZES[_r['object'].strip()] = _maj
 
+# Re-seeded per figure inside the main loop, from (angular_seed, ifigure).  A
+# single module-level stream is NOT safe here: every MPI rank builds its own
+# copy with the same seed, so each rank drew the same sequence and every value
+# came out ~nProcs times (the n=667 gmm run: 57 distinct colour ranges, almost
+# all used exactly 10 times on 10 ranks).  Seeding by figure index also makes
+# a figure's draws independent of which rank happens to process it.
 _ang_rng = np.random.default_rng(args.angular_seed)
+
+
+def figure_rng(ifigure):
+    """The angular/colour stream for one figure -- same on every rank."""
+    return np.random.default_rng([args.angular_seed, int(ifigure)])
 
 
 def field_size_arcmin(survey_name, object_id):
@@ -490,6 +501,32 @@ if FAMILY == 'gmm':
                   'built-in range instead, and the two families will NOT match'
                   % _src)
 
+# Each gmm figure takes ONE pool entry, assigned by a seeded shuffle of the
+# pool and indexed by the figure's position in its family.  Without
+# replacement, so with as many real figures as gmm ones every real colour
+# range / size is used once and the two families share the same marginal
+# distribution exactly -- no value is over-represented on the gmm side for a
+# classifier to key on.  The shuffle depends only on the seed, so every rank
+# computes the same order and a rerun of freed slots gets the same values back.
+# (The two pools are filtered differently, so their indices do not line up;
+# each gets its own shuffle.)
+_COLOR_ORDER = np.random.default_rng([args.angular_seed, 1]).permutation(len(GMM_COLOR_POOL))
+_SIZE_ORDER  = np.random.default_rng([args.angular_seed, 2]).permutation(len(GMM_SIZE_POOL))
+
+
+def pool_entry(pool, order, ifigure):
+    """This gmm figure's entry: position k in the family -> pool[order[k]]."""
+    k = int(ifigure) - INDEX_BLOCK['gmm']
+    return pool[order[k % len(pool)]]
+
+
+if FAMILY == 'gmm' and is_root():
+    for _name, _pool in (('colour', GMM_COLOR_POOL), ('size', GMM_SIZE_POOL)):
+        if _pool and len(_pool) < args.start_index + args.number_of_figures:
+            print('[WARN] gmm %s pool has %d entries for %d figures -- entries '
+                  'will repeat, which a classifier can key on'
+                  % (_name, len(_pool), args.start_index + args.number_of_figures))
+
 if FAMILY == 'real' and is_root():
     _known = sum(1 for s in SURVEY_SCALES
                  if angular_range_arcsec(SURVEY_SCALES, s, args.res_factor,
@@ -569,12 +606,15 @@ for sto, ifigure in parallel_objects(np.arange(_first, _last),
 
     figure_name = 'Picture_' + str(ifigure + 1).zfill(6)
 
+    # per-figure stream, read by field_size_arcmin() for the real family
+    _ang_rng = figure_rng(ifigure)
+
     # A gmm sky gets its field size from the pool the real family produced, one
-    # draw per figure, so the two families end up with the same distribution of
+    # entry per figure (see pool_entry), so the two families end up with the same distribution of
     # angular sizes rather than merely the same bounds.
     this_kwargs = figure_kwargs
     if FAMILY == 'gmm' and GMM_SIZE_POOL:
-        pick = float(_ang_rng.choice(GMM_SIZE_POOL)) * 60.0      # arcmin -> arcsec
+        pick = float(pool_entry(GMM_SIZE_POOL, _SIZE_ORDER, ifigure)) * 60.0  # arcmin -> arcsec
         pp = _deepcopy(figure_kwargs['plot_params'])
         centers = pp['image of the sky']['distribution']['gmm']['centers']
         # a hair's width apart, not equal: the scale is drawn with
@@ -585,7 +625,7 @@ for sto, ifigure in parallel_objects(np.arange(_first, _last),
         centers['center_scale']['max'] = pick * (1.0 + 1e-6)
         this_kwargs = dict(figure_kwargs, plot_params=pp)
 
-    # A colour range from the real family, one draw per figure.  Kept as a
+    # A colour range from the real family, one entry per figure.  Kept as a
     # (min, max) PAIR so the floor and the span stay consistent with each
     # other; data_utils applies it as an affine remap after generation, so it
     # moves the colourbar numbers without touching the image structure.
@@ -593,7 +633,7 @@ for sto, ifigure in parallel_objects(np.arange(_first, _last),
         if this_kwargs is figure_kwargs:            # no size draw above
             pp = _deepcopy(figure_kwargs['plot_params'])
             this_kwargs = dict(figure_kwargs, plot_params=pp)
-        _lo, _hi = GMM_COLOR_POOL[_ang_rng.integers(len(GMM_COLOR_POOL))]
+        _lo, _hi = pool_entry(GMM_COLOR_POOL, _COLOR_ORDER, ifigure)
         this_kwargs['plot_params']['image of the sky']['distribution']['gmm'][
             'colour range'] = (_lo, _hi)
 
