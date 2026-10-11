@@ -16,6 +16,10 @@ standalone batch script in the style of the older
 `synthetic_training_figures/create_figures_batch.py`. Nothing from the ArXiv
 mining, figure injection, PDF mining or OCR halves of that pipeline came along.
 
+The comparison set of **published** sky figures (AstroExplorer images with
+astrometry, automated checks, human-verified plot boxes) is built by the code
+in [`real_data/`](real_data/README.md).
+
 ---
 
 ## Quick start

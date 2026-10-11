@@ -1,0 +1,19 @@
+<View>
+  <Header value="$title"/>
+  <Text name="info" value="$info"/>
+  <Image name="image" value="$image" zoom="true" negativeZoom="true" zoomControl="true" rotateControl="false" defaultZoom="fit"/>
+  <PolygonLabels name="box" toName="image" strokeWidth="2" pointSize="medium" opacity="0.15">
+    <Label value="plot box" background="#e41a1c"/>
+  </PolygonLabels>
+  <Header value="Flags (tick any that apply)" size="5"/>
+  <Choices name="flags" toName="image" choice="multiple" showInline="false">
+    <Choice value="auto box correct as-is"/>
+    <Choice value="corners adjusted"/>
+    <Choice value="plot truncated by the image crop"/>
+    <Choice value="multi-panel: box drawn on the panel holding the astrometry"/>
+    <Choice value="no drawn frame: box follows the image/tick extent"/>
+    <Choice value="badly cropped: exclude from comparison (delete the box)"/>
+    <Choice value="no usable axes: exclude from comparison"/>
+  </Choices>
+  <TextArea name="notes" toName="image" placeholder="optional notes" rows="2" maxSubmissions="1"/>
+</View>

@@ -1,0 +1,11 @@
+# Everything the pipeline downloads or writes stays out of git: the figures are
+# under journal copyright, and the rest is derived from them.
+images/
+images_nometa/
+details_html/
+metadata/
+plot_boxes/
+index.csv
+astrometry_check.csv
+astrometry_flags_summary.md
+wwt_check.md
